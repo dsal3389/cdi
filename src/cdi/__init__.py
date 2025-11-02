@@ -108,6 +108,7 @@ def _get_typevars(type_: Any) -> tuple[TypeVar, ...]:
         assert _get_typevars(Foo[str, T]) == (T)
         assert _get_typevars(Foo[T, R]) == (T, R)
         assert _get_typevars(Foo[F, T]) == (F, T)
+        assert _get_typevars(Foo) == ()
     """
     if not _is_typealias(type_):
         return ()
@@ -128,11 +129,29 @@ def _get_generics(type_: Any) -> tuple[TypeVar, ...]:
 
         assert _get_generics(Foo[int, str]) == (T, R)
         assert _get_generics(Foo[F, str]) == (T, R)
+        assert _get_generics(Foo) == (T, R)
     """
+    if _is_typealias(type_):
+        type_ = get_origin(type_)
+
     for orig_base in getattr(type_, "__orig_bases__", []):
         if _is_typealias(orig_base) and get_origin(orig_base) is Generic:
             return get_args(orig_base)
     return ()
+
+
+def _is_concrete_type(type_: Any) -> bool:
+    """
+    returns a boolean value indicating if the given type is a concrete type
+    or it takes generics
+    """
+    # if the given type has generics, we check, if its a type alias (if not its not concrete type because it doesn't has args)
+    # and we check that it doesn't have typevars in its args
+    return (
+        (_get_generics(type_) == ())
+        or _is_typealias(type_)
+        and not _has_typevars(type_)
+    )
 
 
 def _is_union(type_: Any) -> bool:
@@ -156,6 +175,7 @@ def _unwrap_type(type_: Any) -> tuple[Any, ...]:
 
         assert _unwrap_type(str | int) == (str, int)
         assert _unwrap_type(str | int | Annotated[list[str]]) == (str, int, list[str])
+        assert _unwrap_type(str | int | Annotated[list[str]], group_unions=True) == ((str, int, list[str]),)
         assert _unwrap_type(T) == (Any,)
         assert _unwrap_type(T | R) == (Any, str, int)
     """
@@ -178,10 +198,32 @@ def _unwrap_type(type_: Any) -> tuple[Any, ...]:
     return (type_,)
 
 
+def _all_typealias_variants(type_: Any) -> tuple[Any, ...]:
+    origin = get_origin(type_) or type_
+    generic_variants: list[tuple[Any, ...]] = []
+
+    if args := get_args(type_):
+        for arg in args:
+            generic_variants.append(_unwrap_type(arg))
+    else:
+        # unwrap all the generics to their concrete types
+        for generic_arg in _get_generics(origin):
+            generic_variants.append(_unwrap_type(generic_arg))
+
+    variants = []
+    for variant in itertools.product(*generic_variants, repeat=1):
+        variants.append(origin[*variant])  # type: ignore
+    return tuple(variants)
+
+
 class _TypeNode:
     def __init__(self) -> None:
         self._provider: Callable[..., Any] | None = None
         self._implementors: list[Any] = []
+
+    @property
+    def implementors(self) -> tuple[Any, ...]:
+        return tuple(self._implementors)
 
     @property
     def provider(self) -> Callable[..., Any] | None:
@@ -196,7 +238,7 @@ class _TypeNode:
             self._implementors.append(subtype)
 
     def __repr__(self) -> str:
-        return f"_TypeData({self._provider}, {self._implementors})"
+        return f"_TypeData({self._provider}, {self.implementors})"
 
 
 class Scope:
@@ -223,6 +265,9 @@ class Scope:
 
 class Container:
     def __init__(self) -> None:
+        # create a mapping between a type to the typenode, the key
+        # types will always be concrete types and never expect typevar
+        # if given type has typevars that are not bounded they will be replaced with `Any`
         self._entries: dict[type[Any], _TypeNode] = defaultdict(_TypeNode)
 
     def get_provider(self, type_: type[Any]) -> Callable[..., Any] | None:
@@ -239,63 +284,38 @@ class Container:
         self, type_: type[Any] | TypeVar, callable: Callable[..., Any]
     ) -> None:
         if isinstance(type_, TypeVar):
-            variants = _unwrap_type(type_)
-
-            if variants == (Any,):
+            if (variants := _unwrap_type(type_)) == (Any,):
                 raise TypeError(
                     f"given typevar `{type_}` for provider `{callable.__name__}` is not bounded or constraint"
                 )
-
             for variant in variants:
                 self._add_entry(variant).set_provider(callable)
+        elif not _is_concrete_type(type_):
+            for variant in _all_typealias_variants(type_):
+                self._add_entry(variant).set_provider(callable)
+        elif _is_union(type_):
+            for arg in get_args(type_):
+                self._add_entry(arg).set_provider(callable)
         else:
             self._add_entry(type_).set_provider(callable)
-
-    def _add_type_provider(
-        self, type_: type[Any], callable: Callable[..., Any]
-    ) -> None:
-        self._add_entry(type_).set_provider(callable)
 
     def _add_entry(self, type_: type[Any]) -> _TypeNode:
         if type_ in self._entries:
             return self._entries[type_]
-
-        if _is_typealias(type_):
-            # if _has_typevars(type_):
-            #     return self._add_generic_entry(type_)
-            # else:
-            return self._add_typealias_entry(type_)
         return self._add_type_entry(type_)
 
     def _add_type_entry(self, type_: type[Any]) -> _TypeNode:
-        """add a concrete type that doesn't take any generics"""
-        seen_parents = []
-
-        # although we add a concrete type that doesn't take generics
-        # the type_ can inherit from a type that do expect generics, but it will
-        # pass it types and not generics (we will see `Foo[int]` but never `Foo[T]`)
-        for orig_base in getattr(type_, "__orig_bases__", []):
-            if _is_typealias(orig_base) and get_origin(orig_base) is not Generic:
-                self._add_entry(orig_base).add_implementor(type_)
-                seen_parents.append(get_origin(orig_base))
-
-        self._add_direct_parents(
-            type_, mro=type_.__mro__, skip_types=(object, Generic, type_, *seen_parents)
-        )
-        return self._entries[type_]
-
-    def _add_typealias_entry(self, type_: type[Any]) -> _TypeNode:
         """
         add typealias entry, it is expected that the typ alias
         called when adding a typevar that doesn't take generics in
         its arguments
         """
-
-        origin = cast(type[Any], get_origin(type_))
+        origin = get_origin(type_) or type_
 
         # create a mapping between the generics the current typealias expects and
         # to the value that was passed to the type alias
         # Foo[int, str] (Foo[T, R]) -> {"T": int, "R": str}
+        # if the given type doesn't accept generics this dict will just be empty
         typevar_values = {
             g.__name__: v for g, v in zip(_get_generics(origin), get_args(type_))
         }
@@ -304,13 +324,16 @@ class Container:
         # over them when we iter our `__mro__`
         orig_base_parents = []
 
-        # iterate over the parents that expect generics
-        for orig_base in origin.__orig_bases__:
+        for orig_base in getattr(origin, "__orig_bases__", ()):
             if not _is_typealias(orig_base) or get_origin(orig_base) is Generic:
                 continue
 
             parent_typevars = []
 
+            # takes the parent argument that were passed, if we pass to the parent
+            # a typevar, we resolve that typevar with the concrete value that was
+            # passed to use, assume we are typealias, if we are not typealias, we cannot pass
+            # a parent generics
             for arg in get_args(orig_base):
                 if isinstance(arg, TypeVar):
                     # if the parent takes a generic, we need to convert that generic
@@ -327,32 +350,13 @@ class Container:
 
         self._add_direct_parents(
             type_,
-            mro=origin.__mro__,
-            skip_types=(origin, Generic, object, *orig_base_parents),
+            bases=origin.__bases__,
+            skip_types=(object, Generic, *orig_base_parents),
         )
         return self._entries[type_]
 
-    def _add_generic_entry(self, type_: Any) -> _TypeNode:
-        origin = cast(type, get_origin(type_))
-        generic_variants: list[tuple[Any, ...]] = []
-
-        # unwrap all the generics to their concrete types
-        for generic_arg in _get_generics(origin):
-            generic_variants.append(_unwrap_type(generic_arg))
-
-        for variant in itertools.product(*generic_variants, repeat=1):
-            variant_type = origin[*variant]  # type: ignore
-
-            # add the current type variant as subtype for the direct parents
-            self._add_direct_parents(
-                variant_type, mro=origin.__mro__, skip_types=(object, Generic, origin)
-            )
-
-        # trigger the defaultdict to create an entiry for this type if doesn't exists
-        return self._entries[type_]
-
     def _add_direct_parents(
-        self, type_: type[Any], mro: tuple[Any], skip_types: tuple[Any]
+        self, type_: type[Any], bases: tuple[Any, ...], skip_types: tuple[Any, ...]
     ) -> None:
         """
         adds the given type to the direct parents it inherits from the
@@ -368,22 +372,8 @@ class Container:
 
             # this will find `MyClass` direct parents
             # (Foo, Standalone) and it will not return `Base` because it is not direct parent
-            _add_direct_parents(MyClass, mro=MyClass.__mro__, skip_types=(object, MyClass))
+            _add_direct_parents(MyClass, base=MyClass.__bases__, skip_types=(object, MyClass))
         """
-        last_cls: type[Any] | None = None
-        parents_count = 0
-
-        for cls in reversed(mro):
-            if cls in skip_types:
-                continue
-
-            if last_cls and not issubclass(cls, last_cls):
-                self._add_entry(last_cls).add_implementor(type_)
-                parents_count += 1
-            last_cls = cls
-
-        # if we have last_cls but we didn't inherit from any parent, it means
-        # the current type inherits only from 1 class, so we automatically should
-        # add the `last_cls` as the parent of type_
-        if last_cls and parents_count == 0:
-            self._add_entry(last_cls).add_implementor(type_)
+        for cls in bases:
+            if cls not in skip_types:
+                self._add_entry(cls).add_implementor(type_)
