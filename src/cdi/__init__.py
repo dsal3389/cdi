@@ -44,9 +44,21 @@ def func(int_base: cdi.Bounded[Base]) -> None:
 
 """
 
+import inspect
 import itertools
-from types import UnionType
-from typing import Any, TypeVar, Union, Annotated, Generic, cast, get_origin, get_args
+import threading
+from types import UnionType, ModuleType
+from typing import (
+    Any,
+    ForwardRef,
+    TypeVar,
+    Union,
+    Annotated,
+    Generic,
+    cast,
+    get_origin,
+    get_args,
+)
 from collections.abc import Callable
 from collections import defaultdict
 
@@ -216,6 +228,10 @@ def _all_typealias_variants(type_: Any) -> tuple[Any, ...]:
     return tuple(variants)
 
 
+def _forward_ref(s: str) -> ForwardRef:
+    return ForwardRef(s)
+
+
 class _TypeNode:
     def __init__(self) -> None:
         self._provider: Callable[..., Any] | None = None
@@ -269,6 +285,16 @@ class Container:
         # types will always be concrete types and never expect typevar
         # if given type has typevars that are not bounded they will be replaced with `Any`
         self._entries: dict[type[Any], _TypeNode] = defaultdict(_TypeNode)
+        self._forward_refs: dict[
+            ModuleType, list[tuple[ForwardRef, Callable[..., Any]]]
+        ] = defaultdict(list)
+        self._lock = threading.Lock()
+
+    def update_forward_ref(self, module: ModuleType) -> None:
+        for fr, callable in self._forward_refs[module]:
+            evaluated = fr._evaluate(module.__dict__, {}, frozenset())
+            self.add_provider(evaluated, callable)
+        del self._forward_refs[module]
 
     def get_provider(self, type_: type[Any]) -> Callable[..., Any] | None:
         if _is_typealias(type_) and _has_typevars(type_):
@@ -280,10 +306,15 @@ class Container:
             return self._entries[type_].provider
         return None
 
-    def add_provider(
-        self, type_: type[Any] | TypeVar, callable: Callable[..., Any]
-    ) -> None:
-        if isinstance(type_, TypeVar):
+    def add_provider(self, type_: Any, callable: Callable[..., Any]) -> None:
+        with self._lock:
+            self._add_provider(type_, callable)
+
+    def _add_provider(self, type_: Any, callable: Callable[..., Any]) -> None:
+        if isinstance(type_, str):
+            module = cast(ModuleType, inspect.getmodule(callable))
+            self._forward_refs[module].append((_forward_ref(type_), callable))
+        elif isinstance(type_, TypeVar):
             if (variants := _unwrap_type(type_)) == (Any,):
                 raise TypeError(
                     f"given typevar `{type_}` for provider `{callable.__name__}` is not bounded or constraint"
