@@ -72,6 +72,9 @@ Fixture = Annotated[T, _Fixture]
 Factory = Annotated[T, _Factory]
 
 
+__skip_types__ = (object, Generic)
+
+
 def _is_typealias(type_: Any) -> bool:
     return get_origin(type_) is not None and len(get_args(type_)) > 0
 
@@ -291,10 +294,11 @@ class Container:
         self._lock = threading.Lock()
 
     def update_forward_ref(self, module: ModuleType) -> None:
-        for fr, callable in self._forward_refs[module]:
-            evaluated = fr._evaluate(module.__dict__, {}, frozenset())
-            self.add_provider(evaluated, callable)
-        del self._forward_refs[module]
+        with self._lock:
+            for fr, callable in self._forward_refs[module]:
+                evaluated = fr._evaluate(module.__dict__, {}, frozenset())
+                self._add_provider(evaluated, callable)
+            del self._forward_refs[module]
 
     def get_provider(self, type_: type[Any]) -> Callable[..., Any] | None:
         if _is_typealias(type_) and _has_typevars(type_):
@@ -323,14 +327,21 @@ class Container:
                 self._add_entry(variant).set_provider(callable)
         elif not _is_concrete_type(type_):
             for variant in _all_typealias_variants(type_):
-                self._add_entry(variant).set_provider(callable)
-        elif _is_union(type_):
-            for arg in get_args(type_):
-                self._add_entry(arg).set_provider(callable)
+                self._add_provider(variant, callable)
+        elif _is_typealias(type_):
+            for tt in _unwrap_type(type_):
+                if not _is_concrete_type(tt):
+                    self._add_provider(tt, callable)
+                else:
+                    self._add_entry(tt).set_provider(callable)
         else:
             self._add_entry(type_).set_provider(callable)
 
     def _add_entry(self, type_: type[Any]) -> _TypeNode:
+        """
+        adds an entry for given type, if type already has an entry, it will
+        return the existing one
+        """
         if type_ in self._entries:
             return self._entries[type_]
         return self._add_type_entry(type_)
@@ -379,32 +390,9 @@ class Container:
             # add the current type as an implementor of the parent variant
             self._add_entry(parent_origin[*parent_typevars]).add_implementor(type_)
 
-        self._add_direct_parents(
-            type_,
-            bases=origin.__bases__,
-            skip_types=(object, Generic, *orig_base_parents),
-        )
-        return self._entries[type_]
+        skip_parents = (*__skip_types__, *orig_base_parents)
 
-    def _add_direct_parents(
-        self, type_: type[Any], bases: tuple[Any, ...], skip_types: tuple[Any, ...]
-    ) -> None:
-        """
-        adds the given type to the direct parents it inherits from the
-        given mro
-
-            class Base: pass
-            class Foo(Base): pass
-            class Boo(Base): pass
-            class Standalone: pass
-
-            class MyClass(Foo, Standalone):
-                pass
-
-            # this will find `MyClass` direct parents
-            # (Foo, Standalone) and it will not return `Base` because it is not direct parent
-            _add_direct_parents(MyClass, base=MyClass.__bases__, skip_types=(object, MyClass))
-        """
-        for cls in bases:
-            if cls not in skip_types:
+        for cls in origin.__bases__:
+            if cls not in skip_parents:
                 self._add_entry(cls).add_implementor(type_)
+        return self._entries[type_]
