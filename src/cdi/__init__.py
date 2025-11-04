@@ -18,14 +18,13 @@ from collections.abc import Callable
 from collections import defaultdict
 
 
-T = TypeVar("T")
-_I = TypeVar("_I")
+_T = TypeVar("_T")
 
 _Fixture = object()
 _Factory = object()
 
-Fixture = Annotated[T, _Fixture]
-Factory = Annotated[T, _Factory]
+Fixture = Annotated[_T, _Fixture]
+Factory = Annotated[_T, _Factory]
 
 
 __skip_types__ = (object, Generic)
@@ -170,6 +169,22 @@ def _unwrap_type(type_: Any) -> tuple[Any, ...]:
 
 
 def _all_typealias_variants(type_: Any) -> tuple[Any, ...]:
+    """
+    returns all the typealias possible variants, this function also
+    accept types that have generics but are not typealiases
+
+        T = TypeVar("T")
+        R = TypeVar("R", int, str)
+
+        class Foo(Generic[T]): pass
+
+        class Complex(Generic[T, R])
+
+        assert _all_typealias_variants(Foo) == (Foo[Any],)
+        assert _all_typealias_variants(Foo[R]) == (Foo[int], Foo[str])
+        assert _all_typealias_variants(Complex[str, R]) == (Complex[str, int], Complex[str, str])
+        assert _all_typealias_variants(Complex[T, int]) == (Complex[Any, int],)
+    """
     origin = get_origin(type_) or type_
     generic_variants: list[tuple[Any, ...]] = []
 
@@ -324,14 +339,8 @@ class Container:
             del self._forward_refs[module]
 
     def get_provider(self, type_: type[Any]) -> _Provider | None:
-        if _is_typealias(type_) and _has_typevars(type_):
-            # TODO
-            # return self._get_generic_entry(type_)
-            raise NotImplementedError
-
-        if type_ in self._entries:
-            return self._entries[type_].provider
-        return None
+        with self._lock:
+            return self._get_provider(type_)
 
     def add_provider(self, type_: Any, callable: Callable[..., Any]) -> None:
         """
@@ -407,6 +416,41 @@ class Container:
 
         with self._lock:
             self._add_provider(type_, provider)
+
+    def _get_provider(self, type_: Any) -> _Provider | None:
+        typenodes = []
+        if not _is_concrete_type(type_):
+            # will possibly point to the best provider with
+            # the lowest metrics which means it should be the best match
+            # and most specific provider for generic type
+            best_provider: _Provider | None = None
+
+            for variant in _all_typealias_variants(type_):
+                # if we don't have an entry to this type variant, it means it was never
+                # registered to the container, either directly via `add_provider` or
+                # indirectly by a child class
+                if variant not in self._entries:
+                    continue
+
+                typenode = self._entries[variant]
+
+                # if the variant has a provider
+                # we should check if that provider has a lower metrics
+                if typenode.provider is not None and (
+                    best_provider is None
+                    or best_provider.metric > typenode.provider.metric
+                ):
+                    best_provider = typenode.provider
+                typenodes.append(typenode)
+
+            if best_provider:
+                return best_provider
+        elif type_ in self._entries:
+            typenode = self._entries[type_]
+            if typenode.provider is not None:
+                return typenode.provider
+            typenodes.append(typenode)
+        raise NotImplementedError
 
     def _add_provider(self, type_: Any, provider: _Provider) -> None:
         if isinstance(type_, str):
@@ -492,13 +536,13 @@ class Container:
         return self._entries[type_]
 
     @overload
-    def inject(self, __o: None = None, /) -> Callable[[_I], _I]: ...
+    def inject(self, __o: None = None, /) -> Callable[[_T], _T]: ...
 
     @overload
-    def inject(self, __o: _I, /) -> _I: ...
+    def inject(self, __o: _T, /) -> _T: ...
 
-    def inject(self, __o: _I | None = None, /) -> _I | Callable[[_I], _I]:
-        def __inject(__o: _I, /) -> _I:
+    def inject(self, __o: _T | None = None, /) -> _T | Callable[[_T], _T]:
+        def __inject(__o: _T, /) -> _T:
             if inspect.isclass(__o):
                 self.add_provider(__o, __o.__init__)
             else:
