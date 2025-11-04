@@ -254,6 +254,32 @@ class Container:
         self._lock = threading.Lock()
 
     def update_forward_ref(self, module: ModuleType) -> None:
+        """
+        evalutes all the forward referenced types from a module
+        and adds them to the internal container tree for type provider
+
+            def my_foo_provider() -> "Foo":
+                pass
+
+            ctr.add_provider("Foo", my_foo_provider)
+
+            class Foo:
+                pass
+
+            # although `Foo` is not defined, we will not get provider
+            # for this type because we didn't update the forward references
+            # in the our container (ctr)
+            assert ctr.get_provider(Foo) is None
+
+            # update the forward references for the current
+            # module after we defined the `Foo` class
+            ctr.update_forward_ref(sys.modules[__name__])
+
+            # now the `get_provider` call will return for us a provider
+            # that can give us `Foo`
+            assert ctr.get_provider(Foo) is not None
+        """
+
         with self._lock:
             for fr, callable in self._forward_refs[module]:
                 evaluated = _evaluate_forward_ref(fr, module)
@@ -271,6 +297,75 @@ class Container:
         return None
 
     def add_provider(self, type_: Any, callable: Callable[..., Any]) -> None:
+        """
+        adds a provider for the given type, the given type can be a typevar, type alias or
+        even type that accept generics
+
+        if the given type_ is a string, it will be treated as a forward reference and will not be
+        evaluted to the real (forwarded) type until `update_forward_ref` is called
+
+        if a typevar is passed, the typevar will be resolved based on its constraints or bounds, if the
+        typevar is not bounded to anything, a TypeError will be raised because it the only
+        evaluation possible is `Any` which does not make sense, so typevars will be evaluated like so
+
+            T = TypeVar("T", int, str) # evaluted to (int, str)
+            R = TypeVar("R", bound=Iterable)  # evaluted to (Iterable)
+            E = TypeVar("E")  # evaluate to `Any` which result in an error
+
+        so the given provider will be a provider for all the typevar evaluation
+
+        if a typealias is passed, provider will be mapped 1 to one, but the an extra logic will
+        be performed on the typealias to build a inheritence tree
+
+            T = TypeVar("T")
+            ctr = Container()
+
+            class Base:
+                pass
+
+            class Foo(Base, Generic[T]):
+                pass
+
+            ctr.add_provider(Foo[int], ...)
+            ctr.add_provider(Foo[str], ...)
+
+        the internal container "tree" would look like so
+
+                     Base
+                  [no provider]
+                   /       \
+                  /         \
+              Foo[int]     Foo[str]
+              [provider]   [provider]
+
+        this will help for generic resultion when trying to get
+        a provider for a generic
+
+        if a type that accept generics is passed and it is not a concrete type, means
+        it can be a typealias that accept generics or a type that has generics
+
+            T = TypeVar("T")
+            R = TypeVar("R", int, str)
+
+            class Foo(Base, Generic[T, R]):
+                pass
+
+            Foo <- type that accept generic T, R
+            Foo[T, int] <- accept generic T
+
+            ctr.add_provider(Foo, x)
+            ctr.add_provider(Foo[T, int], y)
+
+        the internal container tree will map all the evaluation of T
+        to the given provider
+
+                      Base
+                  /           \
+                 /             \
+                /               \
+              Foo[Any, int]   Foo[Any, str]
+              [provider: y]  [provider: x]
+        """
         with self._lock:
             self._add_provider(type_, callable)
 
