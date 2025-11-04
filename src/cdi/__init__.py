@@ -1,49 +1,3 @@
-"""
-no support for unbounded generic
-
-
-T = TypeVar("T")
-R = TypeVar("R", int, str)
-
-class Complex(Generic[T, R])
-
-class Base(Generic[T]):
-    pass
-
-
-class Foo(Base[int]):
-    pass
-
-
-class Boo(Foo):
-    pass
-
-
-<type> -> (<provider> | None, set(<implementors>, ...))
-
-Base[Any] -> (None, set(Base[int]))
-Base[int] -> (None, set(Foo))
-Foo -> (provider, set(Boo))
-Boo -> (None, ())
-Complex[Any, int] -> (None, set())
-Complex[Any, str] -> (None, set())
-
-
-# both are the same looks for something that
-# implements `Base[int]`
-T = TypeVar(bound=Base[int])
-cdi.Bound[Base[int]]
-
-# looks for Base int type
-Base[int]
-
-cdi.MultiBound[Base[int], Foo]
-
-def func(int_base: cdi.Bounded[Base]) -> None:
-    ...
-
-"""
-
 import inspect
 import itertools
 import threading
@@ -58,12 +12,14 @@ from typing import (
     cast,
     get_origin,
     get_args,
+    overload,
 )
 from collections.abc import Callable
 from collections import defaultdict
 
 
 T = TypeVar("T")
+_I = TypeVar("_I")
 
 _Fixture = object()
 _Factory = object()
@@ -235,6 +191,10 @@ def _forward_ref(s: str) -> ForwardRef:
     return ForwardRef(s)
 
 
+def _evaluate_forward_ref(fr: ForwardRef, module: ModuleType) -> Any | None:
+    return fr._evaluate(module.__dict__, {}, frozenset())
+
+
 class _TypeNode:
     def __init__(self) -> None:
         self._provider: Callable[..., Any] | None = None
@@ -296,7 +256,7 @@ class Container:
     def update_forward_ref(self, module: ModuleType) -> None:
         with self._lock:
             for fr, callable in self._forward_refs[module]:
-                evaluated = fr._evaluate(module.__dict__, {}, frozenset())
+                evaluated = _evaluate_forward_ref(fr, module)
                 self._add_provider(evaluated, callable)
             del self._forward_refs[module]
 
@@ -396,3 +356,44 @@ class Container:
             if cls not in skip_parents:
                 self._add_entry(cls).add_implementor(type_)
         return self._entries[type_]
+
+    @overload
+    def inject(self, __o: None = None, /) -> Callable[[_I], _I]: ...
+
+    @overload
+    def inject(self, __o: _I, /) -> _I: ...
+
+    def inject(self, __o: _I | None = None, /) -> _I | Callable[[_I], _I]:
+        def __inject(__o: _I, /) -> _I:
+            if inspect.isclass(__o):
+                self.add_provider(__o, __o.__init__)
+            else:
+                __o = cast(Callable[..., Any], __o)
+
+                signature = inspect.signature(__o)
+                rt = signature.return_annotation
+
+                if rt is signature.empty:
+                    raise TypeError(
+                        f"decorated provider `{__o._name__}` doesn't have any return type annotation"
+                    )
+
+                if isinstance(rt, str):
+                    module = inspect.getmodule(__o)
+                    try:
+                        fr = _forward_ref(rt)
+                        rt = _evaluate_forward_ref(fr, module)
+                    except NameError:
+                        # if the return type is a forward reference, we might be able to evaluate
+                        # it at the spot, if not at leaset we tried
+                        pass
+
+                self.add_provider(rt, __o)
+            return __o
+
+        if __o is None:
+            return __inject
+        return __inject(__o)
+
+
+defaultc = Container()
