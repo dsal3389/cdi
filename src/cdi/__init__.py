@@ -187,6 +187,24 @@ def _all_typealias_variants(type_: Any) -> tuple[Any, ...]:
     return tuple(variants)
 
 
+def _calculate_type_matric(type_: Any) -> int:
+    if _is_concrete_type(type_):
+        return 0
+
+    priority = 0
+
+    if _is_typealias(type_):
+        for typevar in _get_typevars(type_):
+            # for every typevar
+            for _ in _get_typevar_variants(typevar):
+                priority += 5
+    else:
+        for _ in _get_generics(type_):
+            priority += 1000
+
+    return priority
+
+
 def _forward_ref(s: str) -> ForwardRef:
     return ForwardRef(s)
 
@@ -195,9 +213,25 @@ def _evaluate_forward_ref(fr: ForwardRef, module: ModuleType) -> Any | None:
     return fr._evaluate(module.__dict__, {}, frozenset())
 
 
+class _Provider:
+    def __init__(self, callable: Callable[..., Any], metric: int) -> None:
+        self._callable = callable
+        self._metric = metric
+
+    @property
+    def metric(self) -> int:
+        return self._metric
+
+    def __str__(self) -> str:
+        return f"Provider[{self._callable.__name__} | {self._metric}]"
+
+    def __repr__(self) -> str:
+        return f"_Provider(callable={self._callable!r}, priority={self._metric!r})"
+
+
 class _TypeNode:
     def __init__(self) -> None:
-        self._provider: Callable[..., Any] | None = None
+        self._provider: _Provider | None = None
         self._implementors: list[Any] = []
 
     @property
@@ -205,11 +239,14 @@ class _TypeNode:
         return tuple(self._implementors)
 
     @property
-    def provider(self) -> Callable[..., Any] | None:
+    def provider(self) -> _Provider | None:
         return self._provider
 
-    def set_provider(self, provider: Callable[..., None]) -> None:
-        self._provider = provider
+    def set_provider(self, provider: _Provider) -> None:
+        # if we do have a provider, check against the providers metrics, if the given
+        # provider metric is lower it means it is better
+        if self._provider is None or provider.metric < self._provider.metric:
+            self._provider = provider
 
     def add_implementor(self, subtype: type) -> None:
         """add the given type as an implementor of the current typenode"""
@@ -217,7 +254,7 @@ class _TypeNode:
             self._implementors.append(subtype)
 
     def __repr__(self) -> str:
-        return f"_TypeData({self._provider}, {self.implementors})"
+        return f"_TypeData({self._provider!r}, {self.implementors!r})"
 
 
 class Scope:
@@ -248,9 +285,9 @@ class Container:
         # types will always be concrete types and never expect typevar
         # if given type has typevars that are not bounded they will be replaced with `Any`
         self._entries: dict[type[Any], _TypeNode] = defaultdict(_TypeNode)
-        self._forward_refs: dict[
-            ModuleType, list[tuple[ForwardRef, Callable[..., Any]]]
-        ] = defaultdict(list)
+        self._forward_refs: dict[ModuleType, list[tuple[ForwardRef, _Provider]]] = (
+            defaultdict(list)
+        )
         self._lock = threading.Lock()
 
     def update_forward_ref(self, module: ModuleType) -> None:
@@ -281,12 +318,12 @@ class Container:
         """
 
         with self._lock:
-            for fr, callable in self._forward_refs[module]:
+            for fr, provider in self._forward_refs[module]:
                 evaluated = _evaluate_forward_ref(fr, module)
-                self._add_provider(evaluated, callable)
+                self._add_provider(evaluated, provider)
             del self._forward_refs[module]
 
-    def get_provider(self, type_: type[Any]) -> Callable[..., Any] | None:
+    def get_provider(self, type_: type[Any]) -> _Provider | None:
         if _is_typealias(type_) and _has_typevars(type_):
             # TODO
             # return self._get_generic_entry(type_)
@@ -366,31 +403,33 @@ class Container:
               Foo[Any, int]   Foo[Any, str]
               [provider: y]  [provider: x]
         """
-        with self._lock:
-            self._add_provider(type_, callable)
+        provider = _Provider(callable=callable, metric=_calculate_type_matric(type_))
 
-    def _add_provider(self, type_: Any, callable: Callable[..., Any]) -> None:
+        with self._lock:
+            self._add_provider(type_, provider)
+
+    def _add_provider(self, type_: Any, provider: _Provider) -> None:
         if isinstance(type_, str):
             module = cast(ModuleType, inspect.getmodule(callable))
-            self._forward_refs[module].append((_forward_ref(type_), callable))
+            self._forward_refs[module].append((_forward_ref(type_), provider))
         elif isinstance(type_, TypeVar):
             if (variants := _unwrap_type(type_)) == (Any,):
                 raise TypeError(
                     f"given typevar `{type_}` for provider `{callable.__name__}` is not bounded or constraint"
                 )
             for variant in variants:
-                self._add_entry(variant).set_provider(callable)
+                self._add_entry(variant).set_provider(provider)
         elif not _is_concrete_type(type_):
             for variant in _all_typealias_variants(type_):
-                self._add_provider(variant, callable)
+                self._add_provider(variant, provider)
         elif _is_typealias(type_):
             for tt in _unwrap_type(type_):
                 if not _is_concrete_type(tt):
-                    self._add_provider(tt, callable)
+                    self._add_provider(tt, provider)
                 else:
-                    self._add_entry(tt).set_provider(callable)
+                    self._add_entry(tt).set_provider(provider)
         else:
-            self._add_entry(type_).set_provider(callable)
+            self._add_entry(type_).set_provider(provider)
 
     def _add_entry(self, type_: type[Any]) -> _TypeNode:
         """
