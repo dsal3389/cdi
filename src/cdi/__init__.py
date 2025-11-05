@@ -15,7 +15,7 @@ from typing import (
     overload,
 )
 from collections.abc import Callable
-from collections import defaultdict
+from collections import defaultdict, deque
 
 
 _T = TypeVar("_T")
@@ -418,13 +418,8 @@ class Container:
             self._add_provider(type_, provider)
 
     def _get_provider(self, type_: Any) -> _Provider | None:
-        typenodes = []
+        typenodes: list[_TypeNode] = []
         if not _is_concrete_type(type_):
-            # will possibly point to the best provider with
-            # the lowest metrics which means it should be the best match
-            # and most specific provider for generic type
-            best_provider: _Provider | None = None
-
             for variant in _all_typealias_variants(type_):
                 # if we don't have an entry to this type variant, it means it was never
                 # registered to the container, either directly via `add_provider` or
@@ -433,24 +428,36 @@ class Container:
                     continue
 
                 typenode = self._entries[variant]
-
-                # if the variant has a provider
-                # we should check if that provider has a lower metrics
-                if typenode.provider is not None and (
-                    best_provider is None
-                    or best_provider.metric > typenode.provider.metric
-                ):
-                    best_provider = typenode.provider
                 typenodes.append(typenode)
-
-            if best_provider:
-                return best_provider
         elif type_ in self._entries:
             typenode = self._entries[type_]
             if typenode.provider is not None:
                 return typenode.provider
             typenodes.append(typenode)
-        raise NotImplementedError
+        else:
+            return None
+
+        stack = deque(typenodes)
+        best_provider: _Provider | None = None
+
+        while stack:
+            typenode = stack.pop()
+
+            if typenode.provider:
+                # if the current typnode has a provider, we try to take the most specific
+                # provider (the one with the lowest metric) and we don't need to continue
+                # and get the the `typnode.implementors` because one way or another we
+                # already have a provider
+                if (
+                    best_provider is None
+                    or best_provider.metric > typenode.provider.metric
+                ):
+                    best_provider = typenode.provider
+            elif not best_provider:
+                # if the current typenode doesn't have a provider and we didn't find a provider
+                # up until now, we should check the typenode implementors
+                stack.extendleft(self._entries[t] for t in typenode.implementors)
+        return best_provider
 
     def _add_provider(self, type_: Any, provider: _Provider) -> None:
         if isinstance(type_, str):
