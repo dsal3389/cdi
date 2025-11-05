@@ -4,7 +4,7 @@ from collections.abc import Iterable
 
 
 T = TypeVar("T")
-I = TypeVar("I", bound=Iterable[str])
+R = TypeVar("R", str, int)
 
 
 class Base:
@@ -15,15 +15,7 @@ class Foo(Generic[T]):
     pass
 
 
-class Parent(Base, Generic[T]):
-    pass
-
-
-class Child(Generic[T], Parent[T]):
-    pass
-
-
-class MaleChild(Child[str]):
+class Complex(Generic[T, R]):
     pass
 
 

@@ -1,7 +1,8 @@
+from __future__ import annotations
 import inspect
 import itertools
 import threading
-from types import UnionType, ModuleType
+from types import UnionType, ModuleType, NoneType
 from typing import (
     Any,
     ForwardRef,
@@ -40,6 +41,11 @@ def _is_fixture_annotation(anno: type[Any]) -> bool:
 
 def _is_factory_annotation(anno: type[Any]) -> bool:
     return _Factory in get_args(anno)
+
+
+def _is_optional(type_: type[Any]) -> bool:
+    args = get_args(type_)
+    return None in args or NoneType in args
 
 
 def _has_typevars(type_: Any) -> bool:
@@ -203,21 +209,19 @@ def _all_typealias_variants(type_: Any) -> tuple[Any, ...]:
 
 
 def _calculate_type_matric(type_: Any) -> int:
-    if _is_concrete_type(type_):
-        return 0
+    metric = 0
 
-    priority = 0
+    if _is_concrete_type(type_):
+        return metric
 
     if _is_typealias(type_):
         for typevar in _get_typevars(type_):
-            # for every typevar
             for _ in _get_typevar_variants(typevar):
-                priority += 5
+                metric += 5
     else:
         for _ in _get_generics(type_):
-            priority += 1000
-
-    return priority
+            metric += 1000
+    return metric
 
 
 def _forward_ref(s: str) -> ForwardRef:
@@ -228,8 +232,35 @@ def _evaluate_forward_ref(fr: ForwardRef, module: ModuleType) -> Any | None:
     return fr._evaluate(module.__dict__, {}, frozenset())
 
 
+class Lazy(Generic[_T]):
+    def __init__(self, scope: Scope, type_: _T) -> None:
+        self._scope = scope
+        self._instance: _T | None = None
+        self._type = type_
+
+    def wake(self) -> _T:
+        """wake up the lazy type for evalutation!!!"""
+        if self._instance is None:
+            self._instance = cast(_T, self._scope.get_instance(self._type))
+            if self._instance is None:
+                raise RuntimeError
+        return self._instance
+
+    def __str__(self) -> str:
+        return f"Lazy[{self._type!s}]"
+
+    def __repr__(self) -> str:
+        return f"Lazy[{self._type!r}]"
+
+
 class _Provider:
-    def __init__(self, callable: Callable[..., Any], metric: int) -> None:
+    def __init__(
+        self,
+        # dependencies: tuple[Any],
+        callable: Callable[..., Any],
+        metric: int,
+    ) -> None:
+        # self._dependencies = dependencies
         self._callable = callable
         self._metric = metric
 
@@ -273,12 +304,25 @@ class _TypeNode:
 
 
 class Scope:
-    def __init__(self, name: str | None = None) -> None:
-        self._name = name
-        self._instances = {}
+    """
+    the scope defines the life time of objects and it is bound to a single container where
+    the container provide the supported types for the scope and type resolution
+    """
 
-    def get_instance(self, type_: type[Any]) -> Any:
-        if get_origin(type_) is Annotated:
+    def __init__(self, container: Container, name: str | None = None) -> None:
+        self._container = container
+        self._instances = {}
+        self._name = name
+        self._lock = threading.Lock()
+
+    def get_instance(self, type_: Any) -> Any:
+        origin = get_origin(type_)
+
+        if origin is Lazy:
+            lazy_type = get_args(type_)[0]
+            return Lazy(scope=self, type_=lazy_type)
+
+        if origin is Annotated:
             anno_type, *_ = get_args(type_)
 
             if _is_fixture_annotation(anno_type):
@@ -287,8 +331,16 @@ class Scope:
                 return self._get_factory(anno_type)
         return self._get_factory(type_)
 
-    def _get_factory(self, type_: type[Any]) -> None:
-        pass
+    def _get_factory(self, type_: Any) -> Any:
+        if type_ in self._instances:
+            return self._instances[type_]
+
+        if (provider := self._container.get_provider(type_)) is None:
+            return None
+
+        instance = provider._callable()
+        self._instances[type_] = instance
+        return instance
 
     def _get_fixture(self, type_: type[Any]) -> Any:
         pass
@@ -304,6 +356,9 @@ class Container:
             defaultdict(list)
         )
         self._lock = threading.Lock()
+
+    def scope(self, name: str | None = None) -> Scope:
+        return Scope(container=self, name=name)
 
     def update_forward_ref(self, module: ModuleType) -> None:
         """

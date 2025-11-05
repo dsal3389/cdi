@@ -1,7 +1,7 @@
 import cdi
 import pytest
-from typing import Any, TypeVar
-from ._common import Base, Foo, Parent, Child, MaleChild, provider_placehoder
+from typing import Any, TypeVar, Generic
+from ._common import Base, Foo, provider_placehoder
 
 
 @pytest.fixture
@@ -24,6 +24,17 @@ def _assert_entries(
 
 
 def test_with_custom_types(ctr: cdi.Container) -> None:
+    T = TypeVar("T")
+
+    class Parent(Base, Generic[T]):
+        pass
+
+    class Child(Generic[T], Parent[T]):
+        pass
+
+    class MaleChild(Child[str]):
+        pass
+
     ctr.add_provider(Foo, provider_placehoder)
     ctr.add_provider(Foo[str], provider_placehoder)
     ctr.add_provider(Foo[int], provider_placehoder)
