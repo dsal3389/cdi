@@ -35,6 +35,11 @@ _T = TypeVar("_T")
 
 
 class _TypeNode:
+    """
+    represent a type in the container node, this class contains the provider information
+    and also the implementors of the type the type node represent
+    """
+
     def __init__(self) -> None:
         self._provider: Provider | None = None
         self._implementors: list[Any] = []
@@ -74,6 +79,10 @@ class Container:
         self._lock = threading.Lock()
 
     def scope(self, name: str | None = None) -> Scope:
+        """
+        returns a scope bounded to the current container, it is possible
+        to pass name for easy debugging
+        """
         return Scope(container=self, name=name)
 
     def update_forward_ref(self, module: ModuleType) -> None:
