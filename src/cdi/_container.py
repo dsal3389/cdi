@@ -21,7 +21,7 @@ from ._typing import (
     is_concrete_type,
     unwrap_type,
     all_typealias_variants,
-    calculate_type_matric,
+    calculate_type_metric,
     forward_ref,
     evaluate_forward_ref,
     get_generics,
@@ -190,7 +190,7 @@ class Container:
                 callable=callable,
                 callable_args=(),
                 callable_kwargs={},
-                metric=calculate_type_matric(type_),
+                metric=calculate_type_metric(type_),
             )
 
         with self._lock:
@@ -344,6 +344,10 @@ class Container:
 
                 if isinstance(rt, str):
                     module = inspect.getmodule(__o)
+                    assert (
+                        module
+                    ), f"couldn't get module from injector provider `{__o.__name__}`"
+
                     try:
                         fr = forward_ref(rt)
                         rt = evaluate_forward_ref(fr, module)

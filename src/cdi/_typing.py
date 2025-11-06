@@ -209,7 +209,7 @@ def all_typealias_variants(type_: Any) -> tuple[Any, ...]:
     return tuple(variants)
 
 
-def calculate_type_matric(type_: Any) -> int:
+def calculate_type_metric(type_: Any) -> int:
     metric = 0
 
     if is_concrete_type(type_):

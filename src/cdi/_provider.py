@@ -6,7 +6,7 @@ from collections.abc import Callable
 
 from ._consts import __skip_types__
 from ._exceptions import MissingAnnotation
-from ._typing import calculate_type_matric
+from ._typing import calculate_type_metric
 
 
 __all__ = ("Provider",)
@@ -90,5 +90,5 @@ class Provider:
             callable=provider_cls,
             callable_args=tuple(args),
             callable_kwargs=kwargs,
-            metric=calculate_type_matric(provider_cls),
+            metric=calculate_type_metric(provider_cls),
         )
