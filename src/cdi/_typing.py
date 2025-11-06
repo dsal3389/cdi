@@ -140,7 +140,10 @@ def is_union(type_: Any) -> bool:
 def get_typevar_variants(typevar: TypeVar) -> tuple[Any, ...]:
     if typevar.__bound__:
         return unwrap_type(typevar.__bound__)
-    return typevar.__constraints__ or (Any,)
+    if typevar.__constraints__:
+        unwraped_map = map(unwrap_type, typevar.__constraints__)
+        return tuple(itertools.chain.from_iterable(unwraped_map))
+    return (Any,)
 
 
 def unwrap_type(type_: Any) -> tuple[Any, ...]:
@@ -166,9 +169,11 @@ def unwrap_type(type_: Any) -> tuple[Any, ...]:
         if origin is Annotated:
             anno_type, *_ = get_args(type_)
             return unwrap_type(anno_type)
-        if origin is Generic:
+        elif origin is Generic:
             variants_map = map(get_typevar_variants, get_args(type_))
             return tuple(itertools.chain.from_iterable(variants_map))
+        else:
+            return all_typealias_variants(type_)
 
     if isinstance(type_, TypeVar):
         return get_typevar_variants(type_)

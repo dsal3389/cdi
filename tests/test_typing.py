@@ -1,6 +1,6 @@
 import cdi
 import pytest
-from typing import Generic, TypeVar, Union, Annotated
+from typing import Any, Generic, TypeVar, Union, Annotated
 
 from ._common import Base, Foo, Complex, T, R
 
@@ -60,3 +60,23 @@ def test_is_concrete_type() -> None:
     assert not cdi._typing.is_concrete_type(Foo)
     assert not cdi._typing.is_concrete_type(Foo[T])
     assert not cdi._typing.is_concrete_type(Complex[str, R])
+
+
+def test_unwrap_type() -> None:
+    assert cdi._typing.unwrap_type(int) == (int,)
+    assert cdi._typing.unwrap_type(list[int]) == (list[int],)
+    assert cdi._typing.unwrap_type(str | int) == (str, int)
+
+    assert cdi._typing.unwrap_type(Foo[int]) == (Foo[int],)
+    assert cdi._typing.unwrap_type(Foo[T]) == (Foo[Any],)
+    assert cdi._typing.unwrap_type(Foo[R]) == (Foo[str], Foo[int])
+    assert cdi._typing.unwrap_type(R) == (str, int)
+
+    assert cdi._typing.unwrap_type(Annotated[str | int, None]) == (str, int)
+    assert cdi._typing.unwrap_type(
+        Annotated[Annotated[str | int, None] | tuple[int], None]
+    ) == (
+        str,
+        int,
+        tuple[int],
+    )
