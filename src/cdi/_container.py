@@ -240,11 +240,12 @@ class Container:
                 # if we don't have an entry to this type variant, it means it was never
                 # registered to the container, either directly via `add_provider` or
                 # indirectly by a child class
-                if variant not in self._entries:
-                    continue
-
-                typenode = self._entries[variant]
-                typenodes.append(typenode)
+                if variant in self._entries:
+                    typenodes.append(self._entries[variant])
+        elif isinstance(type_, TypeVar):
+            for variant in get_typevar_variants(type_):
+                if variant in self._entries:
+                    typenodes.append(self._entries[variant])
         elif type_ in self._entries:
             typenode = self._entries[type_]
             if typenode.provider is not None:
