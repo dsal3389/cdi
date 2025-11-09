@@ -3,8 +3,9 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING, Any, Annotated, get_origin, get_args
 
-from ._types import Lazy
+from ._exceptions import NoProviderForType
 from ._typing import is_fixture_annotation
+from ._types import Lazy
 
 if TYPE_CHECKING:
     from ._container import Container
@@ -22,7 +23,14 @@ class Scope:
         self._name = name
         self._lock = threading.Lock()
 
+        # prevent circular dependency
+        self._stack = []
+
     def get_instance(self, type_: Any) -> Any:
+        with self._lock:
+            return self._get_instance(type_)
+
+    def _get_instance(self, type_: Any) -> Any:
         origin = get_origin(type_)
 
         if origin is Lazy:
@@ -43,9 +51,20 @@ class Scope:
             return self._instances[type_]
 
         if (provider := self._container.get_provider(type_)) is None:
-            return None
+            raise NoProviderForType(
+                f"not provider found for required type `{type_.__name__}`"
+            )
 
-        instance = provider._callable()
+        args = []
+        kwargs = {}
+
+        for tt in provider.args:
+            args.append(self._get_instance(tt))
+
+        for name, tt in provider.kwargs.items():
+            kwargs[name] = tt
+
+        instance = provider(*args, **kwargs)
         self._instances[type_] = instance
         return instance
 

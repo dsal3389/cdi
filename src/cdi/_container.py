@@ -1,33 +1,33 @@
 import inspect
 import threading
+from collections import defaultdict, deque
+from collections.abc import Callable
 from types import ModuleType
 from typing import (
     Any,
     ForwardRef,
-    TypeVar,
     Generic,
-    overload,
-    get_origin,
-    get_args,
+    TypeVar,
     cast,
+    get_args,
+    get_origin,
+    overload,
 )
-from collections.abc import Callable
-from collections import defaultdict, deque
 
-from ._scope import Scope
-from ._provider import Provider
 from ._consts import __skip_types__
+from ._provider import Provider, provider_from_class
+from ._scope import Scope
 from ._typing import (
-    is_concrete_type,
-    unwrap_type,
     all_typealias_variants,
     calculate_type_metric,
-    forward_ref,
     evaluate_forward_ref,
+    forward_ref,
     get_generics,
+    get_typevar_variants,
+    is_concrete_type,
     is_typealias,
+    unwrap_type,
 )
-
 
 __all__ = ("Container",)
 
@@ -192,8 +192,8 @@ class Container:
               Foo[Any, int]   Foo[Any, str]
               [provider: y]  [provider: x]
         """
-        if inspect.isclass(type_):
-            provider = Provider.from_class(type_)
+        if inspect.isclass(callable):
+            provider = provider_from_class(callable, "__init__")
         else:
             provider = Provider(
                 callable=callable,
@@ -252,7 +252,7 @@ class Container:
             module = cast(ModuleType, inspect.getmodule(callable))
             self._forward_refs[module].append((forward_ref(type_), provider))
         elif isinstance(type_, TypeVar):
-            if (variants := unwrap_type(type_)) == (Any,):
+            if (variants := get_typevar_variants(type_)) == (Any,):
                 raise TypeError(
                     f"given typevar `{type_}` for provider `{callable.__name__}` is not bounded or constraint"
                 )

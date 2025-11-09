@@ -1,4 +1,4 @@
-__all__ = ("CdiException", "MissingAnnotation")
+__all__ = ("CdiException", "MissingAnnotation", "NoProviderForType")
 
 
 class CdiException(Exception):
@@ -6,4 +6,8 @@ class CdiException(Exception):
 
 
 class MissingAnnotation(CdiException):
+    pass
+
+
+class NoProviderForType(CdiException):
     pass
