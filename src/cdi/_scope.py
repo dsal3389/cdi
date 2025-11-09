@@ -3,7 +3,7 @@ from __future__ import annotations
 import threading
 from typing import TYPE_CHECKING, Any, Annotated, get_origin, get_args
 
-from ._exceptions import NoProviderForType
+from ._exceptions import NoProviderError, CircularDependencyError
 from ._typing import is_fixture_annotation
 from ._types import Lazy
 
@@ -50,8 +50,13 @@ class Scope:
         if type_ in self._instances:
             return self._instances[type_]
 
+        if type_ in self._stack:
+            raise CircularDependencyError(tuple(self._stack))
+
+        self._stack.append(type_)
+
         if (provider := self._container.get_provider(type_)) is None:
-            raise NoProviderForType(
+            raise NoProviderError(
                 f"not provider found for required type `{type_.__name__}`"
             )
 
@@ -66,6 +71,8 @@ class Scope:
 
         instance = provider(*args, **kwargs)
         self._instances[type_] = instance
+        self._stack.pop()
+
         return instance
 
     def _get_fixture(self, type_: type[Any]) -> Any:

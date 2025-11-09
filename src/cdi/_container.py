@@ -15,6 +15,7 @@ from typing import (
 )
 
 from ._consts import __skip_types__
+from ._exceptions import ForwardRefError, InternalForwardRefError
 from ._provider import Provider, provider_from_class
 from ._scope import Scope
 from ._typing import (
@@ -73,7 +74,10 @@ class Container:
         # types will always be concrete types and never expect typevar
         # if given type has typevars that are not bounded they will be replaced with `Any`
         self._entries: dict[type[Any], _TypeNode] = defaultdict(_TypeNode)
-        self._forward_refs: dict[ModuleType, list[tuple[ForwardRef, Provider]]] = (
+
+        # dict between the module and the list of providers registered from this module
+        # and are partially initialized, the provider tuple is the provider type and the callable
+        self._forward_refs: dict[ModuleType, list[tuple[Any, Callable[..., Any]]]] = (
             defaultdict(list)
         )
         self._lock = threading.Lock()
@@ -85,7 +89,7 @@ class Container:
         """
         return Scope(container=self, name=name)
 
-    def update_forward_ref(self, module: ModuleType) -> None:
+    def update_forward_refs(self, module: ModuleType) -> None:
         """
         evalutes all the forward referenced types from a module
         and adds them to the internal container tree for type provider
@@ -113,9 +117,16 @@ class Container:
         """
 
         with self._lock:
-            for fr, provider in self._forward_refs[module]:
-                evaluated = evaluate_forward_ref(fr, module)
-                self._add_provider(evaluated, provider)
+            for type_, provider in self._forward_refs[module]:
+                if isinstance(type_, ForwardRef):
+                    type_ = evaluate_forward_ref(type_, module)
+
+                try:
+                    provider = self._try_create_provider(type_, provider)
+                except InternalForwardRefError as e:
+                    raise ForwardRefError(fr=e.fr, module=e.module)
+
+                self._add_provider(type_, provider)
             del self._forward_refs[module]
 
     def get_provider(self, type_: type[Any]) -> Provider | None:
@@ -192,18 +203,35 @@ class Container:
               Foo[Any, int]   Foo[Any, str]
               [provider: y]  [provider: x]
         """
+        with self._lock:
+            try:
+                provider = self._try_create_provider(type_, callable)
+            except InternalForwardRefError as e:
+                self._forward_refs[e.module].append((type_, callable))
+            else:
+                self._add_provider(type_, provider)
+
+    def _try_create_provider(
+        self, type_: Any, callable: Callable[..., Any]
+    ) -> Provider:
+        if isinstance(type_, (str, ForwardRef)):
+            if not isinstance(type_, ForwardRef):
+                fr = forward_ref(type_)
+            else:
+                fr = type_
+            raise InternalForwardRefError(
+                fr=fr, module=cast(ModuleType, inspect.getmodule(callable))
+            )
+
         if inspect.isclass(callable):
-            provider = provider_from_class(callable, "__init__")
+            return provider_from_class(callable, "__init__")
         else:
-            provider = Provider(
+            return Provider(
                 callable=callable,
                 callable_args=(),
                 callable_kwargs={},
                 metric=calculate_type_metric(type_),
             )
-
-        with self._lock:
-            self._add_provider(type_, provider)
 
     def _get_provider(self, type_: Any) -> Provider | None:
         typenodes: list[_TypeNode] = []
@@ -248,10 +276,7 @@ class Container:
         return best_provider
 
     def _add_provider(self, type_: Any, provider: Provider) -> None:
-        if isinstance(type_, str):
-            module = cast(ModuleType, inspect.getmodule(callable))
-            self._forward_refs[module].append((forward_ref(type_), provider))
-        elif isinstance(type_, TypeVar):
+        if isinstance(type_, TypeVar):
             if (variants := get_typevar_variants(type_)) == (Any,):
                 raise TypeError(
                     f"given typevar `{type_}` for provider `{callable.__name__}` is not bounded or constraint"

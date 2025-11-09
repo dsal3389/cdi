@@ -1,5 +1,6 @@
 from __future__ import annotations
-from typing import TYPE_CHECKING, Annotated, TypeVar, Generic, cast
+
+from typing import TYPE_CHECKING, Annotated, Generic, TypeVar, cast
 
 if TYPE_CHECKING:
     from ._scope import Scope
@@ -35,8 +36,6 @@ class Lazy(Generic[_T]):
         """wake up the lazy type for evalutation!!!"""
         if self._instance is None:
             self._instance = cast(_T, self._scope.get_instance(self._type))
-            if self._instance is None:
-                raise RuntimeError
         return self._instance
 
     def __str__(self) -> str:

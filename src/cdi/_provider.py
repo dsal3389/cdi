@@ -3,11 +3,12 @@ from __future__ import annotations
 import inspect
 from collections import defaultdict
 from collections.abc import Callable
-from typing import Any, Generic, TypeVar, get_args, get_origin
+from types import ModuleType
+from typing import Any, TypeVar, cast, get_args, get_origin
 
 from ._consts import __skip_types__
-from ._exceptions import MissingAnnotation
-from ._typing import calculate_type_metric, get_generics, is_typealias
+from ._exceptions import InternalForwardRefError, MissingAnnotationError
+from ._typing import calculate_type_metric, forward_ref, get_generics, is_typealias
 
 __all__ = ("Provider", "provider_from_class")
 
@@ -86,6 +87,9 @@ def provider_from_class(cls: Any, func_name: str) -> Provider:
     while continue_mro and mro_stack:
         mro_cls = mro_stack.pop()
 
+        # if the current mro class doesn't have the target function implemented
+        # it means we reached the end of the inheritence of the target function
+        # and we should not continue the mro processing
         if (callable := getattr(mro_cls, func_name, None)) is None:
             break
 
@@ -100,7 +104,18 @@ def provider_from_class(cls: Any, func_name: str) -> Provider:
         else:
             typeargs = {}
 
-        signature = inspect.signature(callable, eval_str=True)
+        # this will return None for class types that are builtin, if they are builtin
+        # we don't really need to worry about `signature.eval_str` not evaluating
+        module = inspect.getmodule(callable)
+
+        try:
+            signature = inspect.signature(
+                callable, eval_str=True, globals=module.__dict__ if module else {}
+            )
+        except NameError as e:
+            raise InternalForwardRefError(
+                fr=forward_ref(e.name), module=cast(ModuleType, module)
+            )
 
         # we always set continue mro to False and we change it
         # to True only if we find *args or **kwargs in the
@@ -124,7 +139,7 @@ def provider_from_class(cls: Any, func_name: str) -> Provider:
                 continue
 
             if parameter.annotation is parameter.empty:
-                raise MissingAnnotation(
+                raise MissingAnnotationError(
                     f"missing parameter annotation for `{mro_cls.__name__}.{callable}({name}, ...)`, while parsing mro tree of `{origin.__name__}`"
                 )
 
