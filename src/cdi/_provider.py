@@ -10,7 +10,7 @@ from ._consts import __skip_types__
 from ._exceptions import InternalForwardRefError, MissingAnnotationError
 from ._typing import calculate_type_metric, forward_ref, get_generics, is_typealias
 
-__all__ = ("Provider", "provider_from_class")
+__all__ = ("Provider", "provider_from_class", "provider_from_function")
 
 
 class Provider:
@@ -157,4 +157,41 @@ def provider_from_class(cls: Any, func_name: str) -> Provider:
         callable_args=tuple(callable_args),
         callable_kwargs=callable_kwargs,
         metric=calculate_type_metric(cls),
+    )
+
+
+def provider_from_function(callable: Callable[..., Any], type_: Any) -> Provider:
+    callable_args = []
+    callable_kwargs = {}
+
+    module = inspect.getmodule(callable)
+
+    try:
+        signature = inspect.signature(callable, eval_str=True)
+    except NameError as e:
+        raise InternalForwardRefError(
+            fr=forward_ref(e.name), module=cast(ModuleType, module)
+        )
+
+    for name, parameter in signature.parameters.items():
+        if parameter.kind in (
+            inspect.Parameter.VAR_POSITIONAL,
+            inspect.Parameter.VAR_KEYWORD,
+        ):
+            continue
+
+        if parameter.annotation is parameter.empty:
+            raise MissingAnnotationError(
+                f"missing annotation for parameter {name} for provider {callable.__name__}"
+            )
+
+        if parameter.kind is inspect.Parameter.POSITIONAL_ONLY:
+            callable_args.append(parameter.annotation)
+        else:
+            callable_kwargs[name] = parameter.annotation
+    return Provider(
+        callable=callable,
+        callable_args=tuple(callable_args),
+        callable_kwargs=callable_kwargs,
+        metric=calculate_type_metric(type_),
     )

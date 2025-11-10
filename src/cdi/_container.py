@@ -16,7 +16,7 @@ from typing import (
 
 from ._consts import __skip_types__
 from ._exceptions import ForwardRefError, InternalForwardRefError
-from ._provider import Provider, provider_from_class
+from ._provider import Provider, provider_from_class, provider_from_function
 from ._scope import Scope
 from ._typing import (
     all_typealias_variants,
@@ -226,12 +226,7 @@ class Container:
         if inspect.isclass(callable):
             return provider_from_class(callable, "__init__")
         else:
-            return Provider(
-                callable=callable,
-                callable_args=(),
-                callable_kwargs={},
-                metric=calculate_type_metric(type_),
-            )
+            return provider_from_function(callable, type_)
 
     def _get_provider(self, type_: Any) -> Provider | None:
         typenodes: list[_TypeNode] = []
