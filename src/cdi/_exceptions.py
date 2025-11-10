@@ -28,10 +28,11 @@ class CircularDependencyError(CdiError):
         self._stack = stack
         error_stack_message = "Circular dependency detected, type stack:"
 
-        for tt in stack:
+        for i, tt in enumerate(stack):
             module = cast(ModuleType, inspect.getmodule(tt))
-            error_stack_message += f"\n\t{tt.__name__}"
-            error_stack_message += f"\n\t\tcoming from module `{module.__path__}`"
+            error_stack_message += (
+                f"\n\t{i}. {tt.__class__.__name__}({tt.__name__}) - {module.__file__}"
+            )
         super().__init__(error_stack_message)
 
 
