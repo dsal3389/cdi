@@ -1,19 +1,18 @@
 import itertools
-from types import NoneType, UnionType, ModuleType
+from types import ModuleType, NoneType, UnionType
 from typing import (
-    Any,
     Annotated,
-    Generic,
-    Union,
-    TypeVar,
+    Any,
     ForwardRef,
-    get_origin,
-    get_args,
+    Generic,
+    TypeVar,
+    Union,
     cast,
+    get_args,
+    get_origin,
 )
 
-from ._types import FixtureMarker, FactoryMarker
-
+from ._types import FactoryMarker, FixtureMarker
 
 __all__ = (
     "is_typealias",
@@ -26,6 +25,7 @@ __all__ = (
     "is_concrete_type",
     "is_union",
     "get_typevar_variants",
+    "get_typevar_mapping",
     "unwrap_type",
     "all_typealias_variants",
     "calculate_type_metric",
@@ -117,6 +117,24 @@ def get_generics(type_: Any) -> tuple[TypeVar, ...]:
         if is_typealias(orig_base) and get_origin(orig_base) is Generic:
             return get_args(orig_base)
     return ()
+
+
+def get_typevar_mapping(type_: Any) -> dict[str, Any]:
+    """
+    returns a typevar mapping between the generic name to the typevar value
+
+        T = TypeVar("T")
+        R = TypeVar("R")
+
+        class Foo(Generic[T, R]):
+            pass
+
+        assert get_typevar_mapping(Foo) == {}
+        assert get_typevar_mapping(Foo[int, str]) == {"T": int, "R": str}
+    """
+    if is_typealias(type_):
+        return {g.__name__: v for g, v in zip(get_generics(type_), get_args(type_))}
+    return {}
 
 
 def is_concrete_type(type_: Any) -> bool:

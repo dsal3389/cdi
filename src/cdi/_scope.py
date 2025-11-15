@@ -1,14 +1,50 @@
 from __future__ import annotations
 
 import threading
-from typing import TYPE_CHECKING, Any, Annotated, get_origin, get_args
+from typing import TYPE_CHECKING, Annotated, Any, TypeVar, get_args, get_origin
 
-from ._exceptions import NoProviderError, CircularDependencyError
-from ._typing import is_fixture_annotation
+from ._exceptions import CircularDependencyError, NoProviderError
 from ._types import Lazy
+from ._typing import (
+    get_generics,
+    get_typevar_mapping,
+    is_fixture_annotation,
+    is_typealias,
+)
 
 if TYPE_CHECKING:
     from ._container import Container
+
+
+class _InstanceContext:
+    def __init__(
+        self, typeargs: dict[TypeVar, Any], typevars_mapping: dict[TypeVar, Any]
+    ) -> None:
+        self._typeargs = typeargs
+        self._typevars_mapping = typevars_mapping
+
+    def resolve_typevar(self, typevar: TypeVar) -> Any:
+        resolved = typevar
+        if resolved in self._typevars_mapping:
+            resolved = self._typevars_mapping[typevar]
+        if resolved in self._typeargs:
+            return self._typeargs[resolved]
+        return resolved
+
+    def resolve_typealias(self, type_: Any) -> Any:
+        """
+        takes a typealias and evalute the typealias typevars to their real types
+        based on the context
+        """
+        origin = get_origin(type_)
+        typeargs = []
+
+        for arg in get_args(type_):
+            if isinstance(arg, TypeVar):
+                typeargs.append(self.resolve_typevar(arg))
+            else:
+                typeargs.append(arg)
+        return origin[*typeargs]
 
 
 class Scope:
@@ -26,27 +62,34 @@ class Scope:
         # prevent circular dependency
         self._stack = []
 
-    def get_instance(self, type_: Any) -> Any:
+    def get_instance(self, type_: Any, *, _cx: _InstanceContext | None = None) -> Any:
         with self._lock:
-            return self._get_instance(type_)
+            return self._get_instance(type_, cx=_cx)
 
-    def _get_instance(self, type_: Any) -> Any:
+    def _get_instance(self, type_: Any, *, cx: _InstanceContext | None) -> Any:
         origin = get_origin(type_)
 
-        if origin is Lazy:
-            lazy_type = get_args(type_)[0]
-            return Lazy(scope=self, type_=lazy_type)
+        if cx is not None:
+            if isinstance(type_, TypeVar):
+                type_ = cx.resolve_typevar(type_)
+            elif is_typealias(type_):
+                type_ = cx.resolve_typealias(type_)
 
-        if origin is Annotated:
-            anno_type, *_ = get_args(type_)
+        if origin is not None:
+            if origin is Lazy:
+                lazy_type = get_args(type_)[0]
+                return Lazy(scope=self, type_=lazy_type, cx=cx)
 
-            if is_fixture_annotation(anno_type):
-                return self._get_fixture(anno_type)
-            else:
-                return self._get_factory(anno_type)
-        return self._get_factory(type_)
+            if origin is Annotated:
+                anno_type, *_ = get_args(type_)
 
-    def _get_factory(self, type_: Any) -> Any:
+                if is_fixture_annotation(type_):
+                    return self._get_fixture(anno_type, cx=cx)
+                else:
+                    return self._get_factory(anno_type, cx=cx)
+        return self._get_factory(type_, cx=None)
+
+    def _get_factory(self, type_: Any, *, cx: _InstanceContext | None) -> Any:
         if type_ in self._instances:
             return self._instances[type_]
 
@@ -55,25 +98,30 @@ class Scope:
 
         self._stack.append(type_)
 
-        if (provider := self._container.get_provider(type_)) is None:
-            raise NoProviderError(
-                f"not provider found for required type `{type_.__name__}`"
-            )
+        instance = self._get_fixture(type_, cx=cx)
 
-        args = []
-        kwargs = {}
-
-        for tt in provider.args:
-            args.append(self._get_instance(tt))
-
-        for name, tt in provider.kwargs.items():
-            kwargs[name] = tt
-
-        instance = provider(*args, **kwargs)
         self._instances[type_] = instance
         self._stack.pop()
 
         return instance
 
-    def _get_fixture(self, type_: type[Any]) -> Any:
-        pass
+    def _get_fixture(self, type_: type[Any], *, cx: _InstanceContext | None) -> Any:
+        if (provider := self._container.get_provider(type_)) is None:
+            raise NoProviderError(f"not provider found for required type `{type_}`")
+
+        args = []
+        kwargs = {}
+
+        if cx is None:
+            cx = _InstanceContext(
+                typeargs={g: v for g, v in zip(get_generics(type_), get_args(type_))},
+                typevars_mapping=provider.typevar_mapping,
+            )
+
+        for tt in provider.args:
+            args.append(self._get_instance(tt, cx=cx))
+
+        for name, tt in provider.kwargs.items():
+            kwargs[name] = self._get_instance(tt, cx=cx)
+
+        return provider(*args, **kwargs)

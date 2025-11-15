@@ -30,9 +30,7 @@ class CircularDependencyError(CdiError):
 
         for i, tt in enumerate(stack):
             module = cast(ModuleType, inspect.getmodule(tt))
-            error_stack_message += (
-                f"\n\t{i}. {tt.__class__.__name__}({tt.__name__}) - {module.__file__}"
-            )
+            error_stack_message += f"\n\t{i}. module {module.__name__} :: {tt}"
         super().__init__(error_stack_message)
 
 

@@ -8,7 +8,13 @@ from typing import Any, TypeVar, cast, get_args, get_origin
 
 from ._consts import __skip_types__
 from ._exceptions import InternalForwardRefError, MissingAnnotationError
-from ._typing import calculate_type_metric, forward_ref, get_generics, is_typealias
+from ._typing import (
+    calculate_type_metric,
+    forward_ref,
+    get_generics,
+    get_typevar_mapping,
+    is_typealias,
+)
 
 __all__ = ("Provider", "provider_from_class", "provider_from_function")
 
@@ -19,20 +25,28 @@ class Provider:
         callable: Callable[..., Any],
         callable_args: tuple[Any, ...],
         callable_kwargs: dict[str, Any],
+        typevar_mapping: dict[TypeVar, Any],
         metric: int,
     ) -> None:
         self._callable = callable
         self._args = callable_args
         self._kwargs = callable_kwargs
+        self._typevar_mapping = typevar_mapping
         self._metric = metric
 
     @property
     def args(self) -> tuple[Any, ...]:
+        """returns the argument the provider expects"""
         return self._args
 
     @property
     def kwargs(self) -> dict[str, Any]:
+        """returns the kwargs the provider expects"""
         return self._kwargs
+
+    @property
+    def typevar_mapping(self) -> dict[TypeVar, Any]:
+        return self._typevar_mapping
 
     @property
     def metric(self) -> int:
@@ -50,7 +64,7 @@ class Provider:
 
 def provider_from_class(cls: Any, func_name: str) -> Provider:
     if is_typealias(cls):
-        typeargs = {g.__name__: v for g, v in zip(get_generics(cls), get_args(cls))}
+        typeargs = get_typevar_mapping(cls)
         origin = get_origin(cls)
     else:
         typeargs = {g.__name__: g for g in get_generics(cls)}
@@ -58,7 +72,9 @@ def provider_from_class(cls: Any, func_name: str) -> Provider:
 
     # create a mapping between an origin base type
     # to its typealias as can be found in `cls.__orig_bases__`
-    orig_bases_typeargs = defaultdict(dict)
+    # orig_bases_typeargs = defaultdict(dict)
+
+    typevar_mapping = {}
 
     for orig_base in getattr(origin, "__orig_bases__", ()):
         if not is_typealias(orig_base) or orig_base in __skip_types__:
@@ -67,11 +83,9 @@ def provider_from_class(cls: Any, func_name: str) -> Provider:
         base_origin = get_origin(orig_base)
         for generic, arg in zip(get_generics(orig_base), get_args(orig_base)):
             if isinstance(arg, TypeVar):
-                orig_bases_typeargs[base_origin][generic.__name__] = typeargs[
-                    arg.__name__
-                ]
+                typevar_mapping[generic] = typeargs[arg.__name__]
             else:
-                orig_bases_typeargs[base_origin][generic.__name__] = arg
+                typevar_mapping[generic] = arg
 
     # start iterating over the mro tree in a reversed ordered
     # this will help us pop items from the end of the stack and if we want to check
@@ -99,10 +113,10 @@ def provider_from_class(cls: Any, func_name: str) -> Provider:
         if mro_stack and getattr(mro_stack[-1], func_name, None) is callable:
             continue
 
-        if mro_cls in orig_bases_typeargs:
-            typeargs = orig_bases_typeargs[mro_cls]
-        else:
-            typeargs = {}
+        # if mro_cls in orig_bases_typeargs:
+        #     typeargs = orig_bases_typeargs[mro_cls]
+        # else:
+        #     typeargs = {}
 
         # this will return None for class types that are builtin, if they are builtin
         # we don't really need to worry about `signature.eval_str` not evaluating
@@ -143,19 +157,20 @@ def provider_from_class(cls: Any, func_name: str) -> Provider:
                     f"missing parameter annotation for `{mro_cls.__name__}.{callable}({name}, ...)`, while parsing mro tree of `{origin.__name__}`"
                 )
 
-            if isinstance(parameter.annotation, TypeVar):
-                parameter_type = typeargs[parameter.annotation.__name__]
-            else:
-                parameter_type = parameter.annotation
+            # if isinstance(parameter.annotation, TypeVar):
+            #     parameter_type = typeargs[parameter.annotation.__name__]
+            # else:
+            #     parameter_type = parameter.annotation
 
             if parameter.kind is inspect.Parameter.KEYWORD_ONLY:
-                callable_kwargs[name] = parameter_type
+                callable_kwargs[name] = parameter.annotation  # parameter_type
             else:
-                callable_args.append(parameter_type)
+                callable_args.append(parameter.annotation)  # (parameter_type)
     return Provider(
         callable=cls,
         callable_args=tuple(callable_args),
         callable_kwargs=callable_kwargs,
+        typevar_mapping=typevar_mapping,
         metric=calculate_type_metric(cls),
     )
 
@@ -193,5 +208,6 @@ def provider_from_function(callable: Callable[..., Any], type_: Any) -> Provider
         callable=callable,
         callable_args=tuple(callable_args),
         callable_kwargs=callable_kwargs,
+        typevar_mapping={},
         metric=calculate_type_metric(type_),
     )

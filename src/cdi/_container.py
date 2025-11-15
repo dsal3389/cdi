@@ -1,5 +1,6 @@
 import inspect
 import threading
+import itertools
 from collections import defaultdict, deque
 from collections.abc import Callable
 from types import ModuleType
@@ -247,6 +248,30 @@ class Container:
                 return typenode.provider
             typenodes.append(typenode)
         else:
+            # don't know currently if this is something
+            # that should be supported
+            #
+            # if not is_typealias(type_):
+            #     return None
+
+            # origin = get_origin(type_)
+            # typeargs_variants = []
+
+            # for g, v in zip(get_generics(type_), get_args(type_)):
+            #     if isinstance(v, TypeVar):
+            #         return None
+
+            #     variants = []
+            #     typeargs_variants.append(variants)
+
+            #     for variant in get_typevar_variants(g):
+            #         if issubclass(v, variant):
+            #             variants.append(variant)
+
+            # for variant in itertools.product(*typeargs_variants):
+            #     type_variant = origin[*variant]
+            #     if type_variant in self._entries:
+            #         typenodes.append(self._entries[type_variant])
             return None
 
         stack = deque(typenodes)
