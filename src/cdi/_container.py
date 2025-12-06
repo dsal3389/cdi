@@ -19,21 +19,42 @@ from ._consts import __skip_types__
 from ._exceptions import ForwardRefError, InternalForwardRefError
 from ._provider import Provider, provider_from_class, provider_from_function
 from ._scope import Scope
+
+from ._types import TypeVarWrapper
 from ._typing import (
+    has_typevars,
     all_typealias_variants,
     calculate_type_metric,
     evaluate_forward_ref,
     forward_ref,
     get_generics,
     get_typevar_variants,
+    get_typevars,
     is_concrete_type,
     is_typealias,
+    is_union,
     unwrap_type,
 )
 
 __all__ = ("Container",)
 
 _T = TypeVar("_T")
+
+
+def _normilze_type(tt: type[Any]) -> type[Any]:
+    if is_typealias(tt) and has_typevars(tt):
+        safe_args = map(
+            lambda t: TypeVarWrapper(t) if isinstance(t, TypeVar) else t, get_args(tt)
+        )
+        origin = cast(Any, get_origin(tt))
+        return origin[*safe_args]
+    # if the type wasn't a typealias but it has generics and doesn't have typevar
+    # we normilze the type to be a type alias with generics
+    if get_generics(tt) != () and not get_args(tt):
+        safe_args = map(lambda t: TypeVarWrapper(t), get_generics(tt))
+        origin = cast(Any, get_origin(tt))
+        return origin[*safe_args]
+    return tt
 
 
 class _TypeNode:
@@ -297,23 +318,17 @@ class Container:
         return best_provider
 
     def _add_provider(self, type_: Any, provider: Provider) -> None:
-        if isinstance(type_, TypeVar):
-            if (variants := get_typevar_variants(type_)) == (Any,):
-                raise TypeError(
-                    f"given typevar `{type_}` for provider `{callable.__name__}` is not bounded or constraint"
-                )
-            for variant in variants:
-                self._add_entry(variant).set_provider(provider)
-        elif not is_concrete_type(type_):
-            for variant in all_typealias_variants(type_):
-                self._add_provider(variant, provider)
-        elif is_typealias(type_):
+        if is_union(type_):
+            # if we have a union we want to add the provider
+            # for every possible type the union returns
             for tt in unwrap_type(type_):
-                if not is_concrete_type(tt):
-                    self._add_provider(tt, provider)
-                else:
-                    self._add_entry(tt).set_provider(provider)
+                # TODO: ignore none incase union has None
+                self._add_entry(tt).set_provider(provider)
         else:
+            # if the current type accept generics but it is not a typealias, we normilze the type
+            # and make it typealias with its generics
+            if get_generics(type_) != () and not is_typealias(type_):
+                type_ = type_[*get_generics(type_)]
             self._add_entry(type_).set_provider(provider)
 
     def _add_entry(self, type_: type[Any]) -> _TypeNode:
@@ -321,9 +336,10 @@ class Container:
         adds an entry for given type, if type already has an entry, it will
         return the existing one
         """
-        if type_ in self._entries:
-            return self._entries[type_]
-        return self._add_type_entry(type_)
+        normilzed_type = _normilze_type(type_)
+        if normilzed_type in self._entries or isinstance(normilzed_type, TypeVar):
+            return self._entries[normilzed_type]
+        return self._add_type_entry(normilzed_type)
 
     def _add_type_entry(self, type_: type[Any]) -> _TypeNode:
         """

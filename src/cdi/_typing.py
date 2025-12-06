@@ -31,6 +31,7 @@ __all__ = (
     "calculate_type_metric",
     "forward_ref",
     "evaluate_forward_ref",
+    "hash_typevar",
 )
 
 
@@ -254,3 +255,7 @@ def forward_ref(s: str) -> ForwardRef:
 
 def evaluate_forward_ref(fr: ForwardRef, module: ModuleType) -> Any | None:
     return fr._evaluate(module.__dict__, {}, frozenset())
+
+
+def hash_typevar(t: TypeVar) -> int:
+    return sum([hash(t.__name__), hash(t.__bound__), hash(t.__constraints__)])

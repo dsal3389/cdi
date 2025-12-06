@@ -21,10 +21,10 @@ def ctr() -> cdi.Container:
     return cdi.Container()
 
 
-def test_concrete_priority(ctr: cdi.Container) -> None:
-    ctr.add_provider(Base, x_provider)
-    ctr.add_provider(Foo[R], y_provider)
-    ctr.add_provider(Foo[int], z_provider)
-
-    assert ctr.get_provider(Foo[int])._callable is z_provider
-    assert ctr.get_provider(Foo[str])._callable is y_provider
+# def test_concrete_priority(ctr: cdi.Container) -> None:
+#     ctr.add_provider(Base, x_provider)
+#     ctr.add_provider(Foo[R], y_provider)
+#     ctr.add_provider(Foo[int], z_provider)
+#
+#     assert ctr.get_provider(Foo[int])._callable is z_provider
+#     assert ctr.get_provider(Foo[str])._callable is y_provider

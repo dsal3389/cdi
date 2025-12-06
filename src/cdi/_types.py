@@ -6,7 +6,14 @@ if TYPE_CHECKING:
     from ._scope import Scope, _InstanceContext
 
 
-__all__ = ("FixtureMarker", "FactoryMarker", "Fixture", "Factory", "Lazy")
+__all__ = (
+    "FixtureMarker",
+    "FactoryMarker",
+    "Fixture",
+    "Factory",
+    "Lazy",
+    "TypeVarWrapper",
+)
 
 _T = TypeVar("_T")
 
@@ -46,3 +53,31 @@ class Lazy(Generic[_T]):
 
     def __repr__(self) -> str:
         return f"Lazy[{self._type!r}]"
+
+
+class TypeVarWrapper:
+    def __init__(self, typevar: TypeVar) -> None:
+        self._typevar = typevar
+
+    def __hash__(self) -> int:
+        from ._typing import hash_typevar
+
+        return hash_typevar(self._typevar)
+
+    def __eq__(self, value: Any, /) -> bool:
+        from ._typing import hash_typevar
+
+        if isinstance(value, TypeVar):
+            return hash(self) == hash_typevar(value)
+        if isinstance(value, TypeVarWrapper):
+            return hash(self) == hash(value)
+        return False
+
+    def __ne__(self, value: object, /) -> bool:
+        return not (self == value)
+
+    def __str__(self) -> str:
+        return f"TypeVarWrapper[{self._typevar!s}]"
+
+    def __repr__(self) -> str:
+        return f"TypeVarWrapper[{self._typevar!r}]"
