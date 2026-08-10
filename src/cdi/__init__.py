@@ -7,17 +7,14 @@ from ._exceptions import (
     NoProviderError,
 )
 from ._scope import Scope
-from ._types import Factory, Fixture, Lazy
+from ._decorators import Injectable
+from ._typing import *
 
-defaultc = Container()
 
 __all__ = (
     "Scope",
     "Container",
-    "Fixture",
-    "Factory",
-    "Lazy",
-    "defaultc",
+    "Injectable",
     "CdiError",
     "NoProviderError",
     "MissingAnnotationError",
