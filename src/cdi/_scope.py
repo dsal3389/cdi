@@ -7,10 +7,7 @@ from ._registry import Registry
 
 
 class Scope:
-    def __init__(
-        self,
-        container: Container
-    ) -> None:
+    def __init__(self, container: Container) -> None:
         self._container = container
         self._instances = Registry(type)
 
@@ -28,7 +25,7 @@ class Scope:
         self._stack.append(type_)
 
         try:
-            if (factory := self._container.get_factory(type_)):
+            if factory := self._container.get_factory(type_):
                 instance = self._instantiate_from_factory(factory)
                 self._instances.add(instance)
             else:

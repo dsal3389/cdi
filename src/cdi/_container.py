@@ -1,13 +1,13 @@
 from __future__ import annotations
+from types import ModuleType
 
-from ._factory import Factory
-from ._registry import Registry
 from ._typing import is_forward_ref, is_typevar
+from ._evaluator import FactoryParameterEvaluatorProxy, TypeModuleEvaluator
+from ._factory import Factory, FactoryParameter
+from ._registry import Registry
 
 
-__all__ = (
-    "Container",
-)
+__all__ = ("Container",)
 
 
 def _is_factory_valid(factory: Factory) -> bool:
@@ -25,6 +25,10 @@ class Container:
         self._factory: Registry[Factory] = Registry(lambda factory: factory.return_type)
         self._partially_initialized: list[Factory] = []
 
+    @property
+    def is_ready(self) -> bool:
+        return not self._partially_initialized
+
     def register(self, factory: Factory) -> None:
         if _is_factory_valid(factory):
             self._factory.add(factory)
@@ -34,5 +38,28 @@ class Container:
     def get_factory(self, type_: type) -> Factory | None:
         return self._factory.get(type_)
 
-    def update_forward_ref(self) -> None:
-        pass
+    def update_forward_ref(self, module: ModuleType) -> None:
+        partially_initialized = []
+
+        for factory in self._partially_initialized:
+            if factory.module is not module:
+                partially_initialized.append(factory)
+                continue
+
+            for name, parameter in factory.parameters.items():
+                if not is_forward_ref(parameter.annotation):
+                    continue
+
+                annotation = FactoryParameterEvaluatorProxy(
+                    factory=factory, evaluator=TypeModuleEvaluator(parameter.module)
+                ).evaluate((name, parameter))
+                factory.set_parameter(
+                    name,
+                    FactoryParameter(
+                        annotation=annotation,
+                        kind=parameter.kind,
+                        module=parameter.module,
+                    ),
+                )
+            self._factory.add(factory)
+        self._partially_initialized = partially_initialized

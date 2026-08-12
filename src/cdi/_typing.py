@@ -9,6 +9,7 @@ __all__ = (
     "evaluate_forward_ref",
 )
 
+
 def _get_type_vars(orig_bases: Sequence[type | GenericAlias]) -> tuple[TypeVar, ...]:
     for orig_base in orig_bases:
         if get_origin(orig_base) is Generic:
@@ -30,7 +31,9 @@ def is_typevar(value: Any) -> bool:
     return isinstance(value, TypeVar)
 
 
-def evaluate_forward_ref(fr: ForwardRef | str, globalns: dict[str, Any], localns: dict[str, Any]) -> type | None:
+def evaluate_forward_ref(
+    fr: ForwardRef | str, globalns: dict[str, Any], localns: dict[str, Any]
+) -> type | None:
     forward_ref = _as_forward_ref(cast(ForwardRef | str, fr))
     if evaluated := forward_ref._evaluate(globalns, localns, frozenset()):
         return evaluated

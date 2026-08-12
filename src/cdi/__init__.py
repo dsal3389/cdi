@@ -3,7 +3,7 @@ from ._exceptions import (
     CdiError,
     CircularDependencyError,
     ForwardRefError,
-    MissingAnnotationError,
+    TypeEvaluationError,
     NoProviderError,
 )
 from ._scope import Scope
@@ -17,7 +17,7 @@ __all__ = (
     "Injectable",
     "CdiError",
     "NoProviderError",
-    "MissingAnnotationError",
+    "TypeEvaluationError",
     "ForwardRefError",
     "CircularDependencyError",
 )
