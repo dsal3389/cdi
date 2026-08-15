@@ -146,6 +146,39 @@ class MroParameters:
         return _FactoryParameters(parameters)
 
 
+class FuncParameters:
+    def get_parameters(self, func: Callable[..., Any]) -> _FactoryParameters:
+        parameters = _FactoryParameters({})
+        signature = inspect.signature(func)
+
+        module = cast(ModuleType, inspect.getmodule(func))
+        type_evaluator = TypeModuleEvaluator(module)
+
+        for name, parameter in signature.parameters.items():
+            match parameter.kind:
+                case parameter.POSITIONAL_ONLY:
+                    kind = ParameterKind.POSITIONAL
+                case parameter.KEYWORD_ONLY | parameter.POSITIONAL_OR_KEYWORD:
+                    kind = ParameterKind.KEYWORD
+                case _:
+                    continue
+
+            annotation = parameter.annotation
+
+            if is_forward_ref(annotation):
+                try:
+                    annotation = type_evaluator.evaluate(annotation)
+                except TypeEvaluationError:
+                    pass
+
+            parameters[name] = FactoryParameter(
+                annotation=annotation,
+                module=module,
+                kind=kind,
+            )
+        return parameters
+
+
 class Factory(Generic[T]):
     def __init__(
         self,

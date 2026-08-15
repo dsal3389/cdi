@@ -1,4 +1,6 @@
 from __future__ import annotations
+
+import threading
 from types import ModuleType
 
 from ._typing import is_forward_ref, is_typevar
@@ -24,19 +26,24 @@ class Container:
     def __init__(self) -> None:
         self._factory: Registry[Factory] = Registry(lambda factory: factory.return_type)
         self._partially_initialized: list[Factory] = []
+        self._lock = threading.Lock()
 
     @property
     def is_ready(self) -> bool:
-        return not self._partially_initialized
+        with self._lock:
+            return not self._partially_initialized
 
     def register(self, factory: Factory) -> None:
-        if _is_factory_valid(factory):
-            self._factory.add(factory)
-        else:
-            self._partially_initialized.append(factory)
+        is_valid = _is_factory_valid(factory)
+        with self._lock:
+            if is_valid:
+                self._factory.add(factory)
+            else:
+                self._partially_initialized.append(factory)
 
     def get_factory(self, type_: type) -> Factory | None:
-        return self._factory.get(type_)
+        with self._lock:
+            return self._factory.get(type_)
 
     def update_forward_ref(self, module: ModuleType) -> None:
         partially_initialized = []
@@ -51,8 +58,10 @@ class Container:
                     continue
 
                 annotation = FactoryParameterEvaluatorProxy(
-                    factory=factory, evaluator=TypeModuleEvaluator(parameter.module)
+                    factory=factory,
+                    evaluator=TypeModuleEvaluator(parameter.module)
                 ).evaluate((name, parameter))
+
                 factory.set_parameter(
                     name,
                     FactoryParameter(

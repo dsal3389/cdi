@@ -1,9 +1,15 @@
+from collections.abc import Callable
+
 import inspect
 from types import ModuleType
-from typing import TypeVar, cast
+from typing import TypeVar, Any, cast
+
+from cdi._typing import is_forward_ref
 
 from ._container import Container
-from ._factory import MroParameters, FactoryBuilder
+from ._evaluator import TypeModuleEvaluator
+from ._exceptions import TypeEvaluationError
+from ._factory import MroParameters, FuncParameters, FactoryBuilder
 
 
 __all__ = ("Injectable",)
@@ -18,9 +24,7 @@ class Injectable:
 
     def __call__(self, injectable: T) -> T:
         if inspect.isfunction(injectable):
-            if "." in injectable.__qualname__:
-                class_name, method_name = injectable.__qualname__.split(".")
-            raise NotImplementedError
+            self._inject_func_factory(injectable)
         elif inspect.isclass(injectable):
             self._inject_class_factory(injectable)
         return injectable
@@ -35,5 +39,26 @@ class Injectable:
             .with_parameters(parameters)
             .with_return_type(cls)
             .build()
+        )
+        self._ctr.register(factory)
+
+    def _inject_func_factory(self, func: Callable[..., Any]) -> None:
+        parameters = FuncParameters().get_parameters(func)
+        module = cast(ModuleType, inspect.getmodule(func))
+        rt = inspect.signature(func).return_annotation
+
+        if is_forward_ref(rt):
+            try:
+                rt = TypeModuleEvaluator(module).evaluate(rt)
+            except TypeEvaluationError:
+                pass
+
+        factory = (
+            FactoryBuilder()
+                .with_module(module)
+                .with_parameters(parameters)
+                .with_func_impl(func)
+                .with_return_type(rt)
+                .build()
         )
         self._ctr.register(factory)

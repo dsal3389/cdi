@@ -34,7 +34,7 @@ def is_typevar(value: Any) -> bool:
 def evaluate_forward_ref(
     fr: ForwardRef | str, globalns: dict[str, Any], localns: dict[str, Any]
 ) -> type | None:
-    forward_ref = _as_forward_ref(cast(ForwardRef | str, fr))
+    forward_ref = _as_forward_ref(fr)
     if evaluated := forward_ref._evaluate(globalns, localns, frozenset()):
         return evaluated
     return None

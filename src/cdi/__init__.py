@@ -1,8 +1,8 @@
 from ._container import Container
 from ._exceptions import (
     CdiError,
+    IncorrectStackPopping,
     CircularDependencyError,
-    ForwardRefError,
     TypeEvaluationError,
     NoProviderError,
 )
@@ -18,6 +18,6 @@ __all__ = (
     "CdiError",
     "NoProviderError",
     "TypeEvaluationError",
-    "ForwardRefError",
+    "IncorrectStackPopping",
     "CircularDependencyError",
 )
