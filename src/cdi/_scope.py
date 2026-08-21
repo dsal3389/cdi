@@ -3,7 +3,7 @@ from typing import Any
 
 from ._container import Container
 from ._factory import Factory, ParameterKind
-from ._exceptions import IncorrectStackPopping
+from ._exceptions import IncorrectStackPopping, CircularDependencyError
 from ._registry import Registry
 
 
@@ -27,6 +27,11 @@ class Scope:
     def _get_instance(self, type_: type) -> Any:
         if instance := self._instances.get(type_):
             return instance
+
+        if type_ in self._stack:
+            raise CircularDependencyError(
+                tuple(self._stack), type_
+            )
 
         self._stack.append(type_)
 

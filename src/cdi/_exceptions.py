@@ -33,16 +33,14 @@ class TypeEvaluationError(CdiError):
         return self._type_name
 
 
-class NoProviderError(CdiError):
-    pass
-
-
 class CircularDependencyError(CdiError):
-    def __init__(self, stack: tuple[Any, ...]) -> None:
-        self._stack = stack
-        error_stack_message = "Circular dependency detected, type stack:"
+    def __init__(self, stack: tuple[type, ...], type_: type) -> None:
+        error_stack_message = f"Circular dependency detected when trying to resolve `{stack[0].__name__}` by type `{type_.__name__}`:"
 
-        for i, tt in enumerate(stack):
-            module = cast(ModuleType, inspect.getmodule(tt))
-            error_stack_message += f"\n\t{i}. module {module.__name__} :: {tt}"
+        for stack_type in stack:
+            module = cast(ModuleType, inspect.getmodule(stack_type))
+            error_stack_message += f"\n    {module.__name__} - {stack_type.__qualname__}"
+
+        module = cast(ModuleType, inspect.getmodule(type_))
+        error_stack_message += f"\n    {module.__name__} - {type_.__qualname__}"
         super().__init__(error_stack_message)

@@ -4,7 +4,6 @@ from ._exceptions import (
     IncorrectStackPopping,
     CircularDependencyError,
     TypeEvaluationError,
-    NoProviderError,
 )
 from ._scope import Scope
 from ._decorators import Injectable
@@ -16,7 +15,6 @@ __all__ = (
     "Container",
     "Injectable",
     "CdiError",
-    "NoProviderError",
     "TypeEvaluationError",
     "IncorrectStackPopping",
     "CircularDependencyError",
