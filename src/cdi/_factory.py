@@ -180,6 +180,15 @@ class FuncParameters:
 
 
 class Factory(Generic[T]):
+    """
+    a factory for a type, expect the next parameters
+        * name - mostly for error messages / ease of debug
+        * func_impl - callable object that spit out the required type
+        * parameters - the parameters (dependencies) the factory expects to pass to the `func_impl`
+        * return_type - the type the factory returns
+        * module - the module the factory originated from
+    """
+
     def __init__(
         self,
         name: str,

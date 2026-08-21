@@ -23,6 +23,17 @@ def _is_factory_valid(factory: Factory) -> bool:
 
 
 class Container:
+    """
+    container is a box that can store given factories of types but cannot create
+    instances, container can be thought as a type factory for a `Scope`, if a scope need to create
+    a type, it fetches the registered factory for the required type and uses
+    that factory to create the type
+
+    THREAD SAFETY:
+        containers are thread safe, they can be used in multiple different places that use
+        threading, for example, multiple scopes that run on different threads
+    """
+
     def __init__(self) -> None:
         self._factory: Registry[Factory] = Registry(lambda factory: factory.return_type)
         self._partially_initialized: list[Factory] = []
@@ -34,6 +45,10 @@ class Container:
             return not self._partially_initialized
 
     def register(self, factory: Factory) -> None:
+        """
+        registers the given factory with the scope, the factory return type
+        will be used as key when calling the container `get_factory` and providing a type
+        """
         is_valid = _is_factory_valid(factory)
         with self._lock:
             if is_valid:
@@ -42,6 +57,7 @@ class Container:
                 self._partially_initialized.append(factory)
 
     def get_factory(self, type_: type) -> Factory | None:
+        """returns a registered type that his return type is the required type"""
         with self._lock:
             return self._factory.get(type_)
 
