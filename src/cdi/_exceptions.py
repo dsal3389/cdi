@@ -1,12 +1,12 @@
 import inspect
 from types import ModuleType
-from typing import Any, ForwardRef, cast
+from typing import Any, cast
 
 __all__ = (
     "CdiError",
+    "IncorrectStackPopping",
+    "TypeEvaluationError",
     "NoProviderError",
-    "MissingAnnotationError",
-    "ForwardRefError",
     "CircularDependencyError",
 )
 
@@ -15,55 +15,32 @@ class CdiError(Exception):
     pass
 
 
-class MissingAnnotationError(CdiError):
+class IncorrectStackPopping(CdiError):
     pass
 
 
-class NoProviderError(CdiError):
-    pass
+class TypeEvaluationError(CdiError):
+    def __init__(
+        self,
+        message: str,
+        type_name: str,
+    ) -> None:
+        super().__init__(message)
+        self._type_name = type_name
+
+    @property
+    def type_name(self) -> str:
+        return self._type_name
 
 
 class CircularDependencyError(CdiError):
-    def __init__(self, stack: tuple[Any, ...]) -> None:
-        self._stack = stack
-        error_stack_message = "Circular dependency detected, type stack:"
+    def __init__(self, stack: tuple[type, ...], type_: type) -> None:
+        error_stack_message = f"Circular dependency detected when trying to resolve `{stack[0].__name__}` by type `{type_.__name__}`:"
 
-        for i, tt in enumerate(stack):
-            module = cast(ModuleType, inspect.getmodule(tt))
-            error_stack_message += f"\n\t{i}. module {module.__name__} :: {tt}"
+        for stack_type in stack:
+            module = cast(ModuleType, inspect.getmodule(stack_type))
+            error_stack_message += f"\n    {module.__name__} - {stack_type.__qualname__}"
+
+        module = cast(ModuleType, inspect.getmodule(type_))
+        error_stack_message += f"\n    {module.__name__} - {type_.__qualname__}"
         super().__init__(error_stack_message)
-
-
-class ForwardRefError(CdiError):
-    def __init__(self, fr: ForwardRef, module: ModuleType) -> None:
-        self._fr = fr
-        self._module = module
-        super().__init__(
-            f"could not evaluate forward reference for {self._fr!s} from module {module.__file__}\n"
-            + "try calling `update_forward_ref()` on your container after defining this value"
-        )
-
-
-class CdiInternalError(Exception):
-    """
-    internal errors act more like signals rather then exceptions, they stop
-    execution and the cdi library should act in a specific way when receiving
-    those errors
-    """
-
-
-class InternalForwardRefError(CdiInternalError):
-    def __init__(self, fr: ForwardRef, module: ModuleType) -> None:
-        self._fr = fr
-        self._module = module
-        super().__init__(
-            f"couldn't resolve forward ref {self._fr} coming from module {self._module.__file__}"
-        )
-
-    @property
-    def fr(self) -> ForwardRef:
-        return self._fr
-
-    @property
-    def module(self) -> ModuleType:
-        return self._module
