@@ -1,73 +1,76 @@
 # cdi
-injector that supports generics
+stands for "cute dependency injector" I guess?
 
-## generic resolution
-before you use `cdi` to support generics, it is better to understand how `cdi` will try to resolve generics
-to their concrete types
 
-### internal representation
-each container has internal map between a concerete type, to the provider (callable or none if there is no provider) and subtypes that implement
-the type
-
-when you add a provider for a type, `cdi` will take the type and create a new entry for your type and the type parents,
-for example
+## Dependency injection made easy
+while some python dependency injectors require some setup and make some things
+harder to understand for a simple dependency injection, `cdi` aims to simplify
+dependency injection and be fast (relativly to python)
 
 ```py
-class Parent:
-    pass
+import cdi
 
-
-class Child:
-    pass
-
-
+# this container will contain its own registered types
 ctr = cdi.Container()
-ctr.add_provider(Child, provider)
 
-# ctr internal mapping will look like so
-# {
-#   Parent: (None, (Child,)),
-#   Child: (provider, ())
-# }
+
+# register this function as a factory
+# for the `int` type
+@cdi.Injectable(ctr=ctr)
+def get_int() -> int:
+  return 100
+
+
+# register `Foo` as injectable
+# so we can create instances
+@cdi.Injectable(ctr=ctr)
+class Foo:
+  def __init__(self, number: int) -> None:
+      self.number = number
+
+
+# create a scope that will have access to registered
+# types in `ctr` then get an instance of `Foo`
+scope = cdi.Scope(cdi)
+instance = scope.get_instance(Foo)
+assert instance.number == 100
 ```
 
-notice that the parent also has an entry in the container mapping, this is the main power
-for generic resolution
-
-the internal mapping will always be concrete types and the container never holds generics in
-its mapping, so what if you have a type that accept generic?
-
-simply `cdi` will try to resolve this generics based on its `bounds` or `coveriants`, if the generic
-is not bounded to those, it will be treated as `Any`
+## Support Generics
 
 ```py
-T = TypeVar("T")
+import cdi 
+from typing import Generic, TypeVar
+from collection.abc import Sequence
 
 
-class Wrapper(Generic[T]):
-    pass
-
-
-class Base:
-    pass
-
-
-B = TypeVar("B", bound=Base)
-
-
-class BaseWrapper(Generic[B]):
-    pass
-
+T = TypeVar('T')
 
 ctr = cdi.Container()
-ctr.add_provider(Wrapper[T], wrapper_provider)
-ctr.add_provider(Basewrapper, base_provider)  # we can omit the generics
 
-# internal representation
-# {
-#   Wrapper[Any]: (wrapper_provider, ()),
-#   BaseWrapper[Base]: (base_provider, ()),
-# }
+
+class MyBase(Generic[T]):
+    def __init__(self, field: T) -> None:
+        self.field = field
+
+
+@cdi.Injectable(ctr)
+class MyType(MyBase[str]):
+    pass
+
+
+@cdi.Injectable(ctr)
+def name_generator() -> str:
+    return "foo"
+    
+
+scope = cdi.Scope(ctr)
+instance = scope.get_instance(MyType)
+assert instance.field == "foo"
 ```
 
----
+### what is not supported with generics (at least yet)
+* TypeAliases as parameters are not supported (i.e `list[int]`)
+* TypeAliases as injectable return type
+* TypeVars as parameters
+* Typevars as injectable return type
