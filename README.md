@@ -127,7 +127,7 @@ class Boo: ...
 ctr.update_forward_ref(sys.modules[__name__])
 
 # works fine
-instance = Scope(ctr=ctr).get_instance(Foo)
+instance = Scope(__name__, ctr=ctr).get_instance(Foo)
 ```
 
 ## Injectable
@@ -172,7 +172,7 @@ for example
 ctr = cdi.Container()
 cdi.Injectable().register("hello world")
 
-scope = cdi.Scope(cdi=cdi)
+scope = cdi.Scope(__name__, ctr=ctr)
 assert scope.get_instance(str) == "hello world"
 ```
 
@@ -193,7 +193,7 @@ cdi.Injectable(ctr=ctr).register(100)
 
 # we define an instance scope that has access to the injectable
 # registered in `ctr`
-scope = cdi.Scope(ctr)
+scope = cdi.Scope(__name__, ctr)
 instance = scope.get_instance(Foo)
 instance2 = scope.get_instance(Foo)
 
@@ -202,7 +202,7 @@ instance2 = scope.get_instance(Foo)
 assert instance is instance2
 assert instance.number == 100
 
-scope2 = Scope(ctr)
+scope2 = Scope(__name__ + '2', ctr)
 scope2_instance = scope.get_instance(Foo)
 
 # a different scopes don't have access to each other instances 

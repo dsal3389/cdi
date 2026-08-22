@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import threading
 from typing import Any
 
@@ -8,8 +10,9 @@ from ._registry import Registry
 
 
 class Scope:
-    def __init__(self, name: str, *, container: Container) -> None:
+    def __init__(self, name: str, *, container: Container, parent: Scope | None = None) -> None:
         self._name = name
+        self._parent = parent
         self._container = container
         self._instances = Registry(type)
 
@@ -20,12 +23,28 @@ class Scope:
     def name(self) -> str:
         return self._name
 
+    @property
+    def parent(self) -> Scope | None:
+        return self._parent
+
+    def fork(self, name: str | None = None) -> Scope:
+        return Scope(
+            name=name or (self.name + "-fork"),
+            container=self._container,
+            parent=self
+        )
+
     def get_instance(self, type_: type) -> Any:
         with self._lock:
             return self._get_instance(type_)
 
     def _get_instance(self, type_: type) -> Any:
         if instance := self._instances.get(type_):
+            return instance
+
+        # if instance for the type is not available from the current scope and we have
+        # a parent, we want to check if the parent has instance for the required type
+        if self.parent is not None and (instance := self.parent.get_instance(type_)):
             return instance
 
         if type_ in self._stack:
