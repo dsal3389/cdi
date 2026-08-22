@@ -74,3 +74,138 @@ assert instance.field == "foo"
 * TypeAliases as injectable return type
 * TypeVars as parameters
 * Typevars as injectable return type
+
+
+# Documentation
+
+## Container
+container defines the scope of available types for injections, if you have
+a `Scope` that want `int`, it will try to get the `int` factory from his container
+
+thus you can have multiple `Containers` containing different types and provide separation
+but most of the time you will be using a single global container
+
+```py
+ctr = cdi.Container()
+```
+
+### Inject factories
+Containers contain is almost like a register of `Factories`, a factory can
+be injected only through the `Injectable` class
+
+## Forward references
+some factories may have unresolved forward references in their return type or parameters, when evaluated
+it is impossible to know what type sits behind those forward ref strings
+
+```py
+class Foo:
+    # what is the `Boo` type? we just see a string
+    def __init__(self, boo: 'Boo') -> None: ...
+```
+
+such factories will not be usable for injection, to resolve forward refs
+the container class provide `update_forward_ref` which takes the module you want to update the forward refs for, this takes insperation
+from `Pydantic/v1`
+
+the `update_forward_ref` has to be called after there is a class that can evaluate the forward ref
+
+```py
+import sys
+
+@cdi.Injectable(ctr=ctr)
+class Foo:
+    # references `Boo` which is not defined yet
+    def __init__(self, boo: 'Boo') -> None: ...
+
+
+@cdi.Injectable(ctr=ctr)
+class Boo: ...
+
+
+# now that `Boo` is defined, we can update the factories
+# in our current module
+ctr.update_forward_ref(sys.modules[__name__])
+
+# works fine
+instance = Scope(ctr=ctr).get_instance(Foo)
+```
+
+## Injectable
+injectable is a type that creates factories based on the given type and registers
+them with the given container
+
+```py
+ctr = cdi.Container()
+injector = cdi.Injectable(ctr=ctr)
+
+injector.register(Foo)
+injector.register(my_func)
+```
+
+it can also be used as a decorator
+
+```py
+ctr = cdi.Container()
+
+@cdi.Injectable(ctr=ctr)
+class Foo: ...
+
+@cdi.Injectable(ctr=ctr)
+def my_func() -> int: ...
+```
+
+when creating the factory, the injector relys on the provided type hints
+
+### Classes
+when registering a class, the dependencies are taken from the class `__init__` signature, and the factory
+implementation (what is called to return the type) uses the class `__call__`
+
+### Functions
+on functions, the function signature will be used to determin the parameters and return types, calling the factory
+will call the provided function at the end
+
+### Constant
+a constant can be injected into the container, the constant type will be the factory return type, and all scopes
+that require this type will evaluate to the constant, acting as a "global variable" in a container
+for example
+```py
+ctr = cdi.Container()
+cdi.Injectable().register("hello world")
+
+scope = cdi.Scope(cdi=cdi)
+assert scope.get_instance(str) == "hello world"
+```
+
+## Scopes
+scopes provide sepration of live instances, they use the containers to get the factory, and they call
+the factory to create a live instance that will be injected
+
+```py
+ctr = cdi.Container()
+
+# we inject the `Foo` class into the `ctr` container
+@cdi.Injectable(ctr=ctr)
+class Foo:
+    def __init__(self, number: int) -> None:
+        self.number = number
+
+cdi.Injectable(ctr=ctr).register(100)
+
+# we define an instance scope that has access to the injectable
+# registered in `ctr`
+scope = cdi.Scope(ctr)
+instance = scope.get_instance(Foo)
+instance2 = scope.get_instance(Foo)
+
+# the `Foo` will be evaluated only once and be reused
+# for future calls
+assert instance is instance2
+assert instance.number == 100
+
+scope2 = Scope(ctr)
+scope2_instance = scope.get_instance(Foo)
+
+# a different scopes don't have access to each other instances 
+# although they are using the same container
+assert scope2_instance is not instance
+```
