@@ -1,18 +1,19 @@
 from __future__ import annotations
+from typing import Hashable
 
 import threading
 from types import ModuleType
 
 from ._typing import is_forward_ref, is_typevar
 from ._evaluator import FactoryParameterEvaluatorProxy, TypeModuleEvaluator
-from ._factory import Factory, FactoryParameter
+from ._factory import Factory, FactoryParameter, FactoryParameters, FactoryBuilder
 from ._registry import Registry
 
 
 __all__ = ("Container",)
 
 
-def _is_factory_valid(factory: Factory) -> bool:
+def _is_partial_factory(factory: Factory) -> bool:
     if is_forward_ref(factory.return_type) or is_typevar(factory.return_type):
         return False
 
@@ -20,6 +21,39 @@ def _is_factory_valid(factory: Factory) -> bool:
         if is_forward_ref(parameter.annotation) or is_typevar(parameter.annotation):
             return False
     return True
+
+
+def _evaluate_partial_factory(factory: Factory) -> Factory:
+    evaluated_parameters = FactoryParameters({})
+
+    for name, parameter in factory.parameters.items():
+        if not is_forward_ref(parameter.annotation):
+            evaluated_parameters[name] = parameter
+            continue
+
+        annotation = FactoryParameterEvaluatorProxy(
+            factory=factory,
+            evaluator=TypeModuleEvaluator(parameter.module)
+        ).evaluate((name, parameter))
+
+        evaluated_parameters[name] = FactoryParameter(
+            annotation=annotation,
+            kind=parameter.kind,
+            module=parameter.module,
+        )
+    return (
+        FactoryBuilder()
+            .with_name(factory.name)
+            .with_module(factory.module)
+            .with_func_impl(factory.implementor_func)
+            .with_parameters(evaluated_parameters)
+            .with_return_type(factory.return_type)
+            .build()
+    )
+
+
+def _factory_registry_key_impl(factory: Factory) -> Hashable:
+    return factory.return_type
 
 
 class Container:
@@ -35,56 +69,39 @@ class Container:
     """
 
     def __init__(self) -> None:
-        self._factory: Registry[Factory] = Registry(lambda factory: factory.return_type)
+        self._factory: Registry[Factory] = Registry(_factory_registry_key_impl)
         self._partially_initialized: list[Factory] = []
         self._lock = threading.Lock()
-
-    @property
-    def is_ready(self) -> bool:
-        with self._lock:
-            return not self._partially_initialized
 
     def register(self, factory: Factory) -> None:
         """
         registers the given factory with the scope, the factory return type
         will be used as key when calling the container `get_factory` and providing a type
         """
-        is_valid = _is_factory_valid(factory)
+        is_partial = _is_partial_factory(factory)
         with self._lock:
-            if is_valid:
+            if is_partial:
                 self._factory.add(factory)
             else:
                 self._partially_initialized.append(factory)
 
-    def get_factory(self, type_: type) -> Factory | None:
-        """returns a registered type that his return type is the required type"""
-        with self._lock:
-            return self._factory.get(type_)
-
     def update_forward_ref(self, module: ModuleType) -> None:
+        with self._lock:
+            self._update_forward_ref(module)
+
+    def _update_forward_ref(self, module: ModuleType) -> None:
         partially_initialized = []
 
         for factory in self._partially_initialized:
-            if factory.module is not module:
+            if factory.module is module:
+                self._factory.add(_evaluate_partial_factory(factory))
+            else:
                 partially_initialized.append(factory)
-                continue
-
-            for name, parameter in factory.parameters.items():
-                if not is_forward_ref(parameter.annotation):
-                    continue
-
-                annotation = FactoryParameterEvaluatorProxy(
-                    factory=factory,
-                    evaluator=TypeModuleEvaluator(parameter.module)
-                ).evaluate((name, parameter))
-
-                factory.set_parameter(
-                    name,
-                    FactoryParameter(
-                        annotation=annotation,
-                        kind=parameter.kind,
-                        module=parameter.module,
-                    ),
-                )
-            self._factory.add(factory)
         self._partially_initialized = partially_initialized
+
+    def _get_factory(self, type_: type) -> Factory | None:
+        """
+        returns the correct factory for the requested type
+        """
+        with self._lock:
+            return self._factory.get(type_)

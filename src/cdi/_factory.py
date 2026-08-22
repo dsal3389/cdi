@@ -43,7 +43,7 @@ class FactoryParameter:
         return self._module
 
 
-_FactoryParameters = NewType("_FactoryParameters", dict[str, FactoryParameter])
+FactoryParameters = NewType("FactoryParameters", dict[str, FactoryParameter])
 
 
 class MroParameters:
@@ -59,7 +59,7 @@ class MroParameters:
 
     def get_parameters(
         self, mro: Sequence[type], method_name: str
-    ) -> _FactoryParameters:
+    ) -> FactoryParameters:
         parameters = {}
         orig_bases = {}
 
@@ -143,12 +143,12 @@ class MroParameters:
 
             if not should_continue:
                 break
-        return _FactoryParameters(parameters)
+        return FactoryParameters(parameters)
 
 
 class FuncParameters:
-    def get_parameters(self, func: Callable[..., Any]) -> _FactoryParameters:
-        parameters = _FactoryParameters({})
+    def get_parameters(self, func: Callable[..., Any]) -> FactoryParameters:
+        parameters = FactoryParameters({})
         signature = inspect.signature(func)
 
         module = cast(ModuleType, inspect.getmodule(func))
@@ -181,19 +181,16 @@ class FuncParameters:
 
 class Factory(Generic[T]):
     """
-    a factory for a type, expect the next parameters
-        * name - mostly for error messages / ease of debug
-        * func_impl - callable object that spit out the required type
-        * parameters - the parameters (dependencies) the factory expects to pass to the `func_impl`
-        * return_type - the type the factory returns
-        * module - the module the factory originated from
+    a factory represent a type (Factory) that produces a different type (return type)
+    the factory contains all the necessary information for the caller to call the
+    factory implementation
     """
 
     def __init__(
         self,
         name: str,
         func_impl: Callable[..., T],
-        parameters: _FactoryParameters,
+        parameters: FactoryParameters,
         return_type: type[T],
         module: ModuleType,
     ) -> None:
@@ -208,8 +205,12 @@ class Factory(Generic[T]):
         return self._name
 
     @property
-    def parameters(self) -> _FactoryParameters:
+    def parameters(self) -> FactoryParameters:
         return self._parameters
+
+    @property
+    def implementor_func(self) -> Callable[..., T]:
+        return self._func
 
     @property
     def return_type(self) -> type[T]:
@@ -231,7 +232,7 @@ class FactoryBuilder:
         self._name: str | None = None
         self._func_impl: Callable[..., Any] | None = None
         self._module: ModuleType | None = None
-        self._parameters: _FactoryParameters = _FactoryParameters({})
+        self._parameters: FactoryParameters = FactoryParameters({})
         self._return_type: type | None = None
 
     def with_name(self, name: str) -> Self:
@@ -246,7 +247,7 @@ class FactoryBuilder:
         self._module = module
         return self
 
-    def with_parameters(self, parameters: _FactoryParameters) -> Self:
+    def with_parameters(self, parameters: FactoryParameters) -> Self:
         self._parameters = parameters
         return self
 
@@ -259,10 +260,11 @@ class FactoryBuilder:
         return self
 
     def build(self) -> Factory:
+        assert self._name is not None
         assert self._func_impl is not None
         assert self._return_type is not None
         return Factory(
-            name=self._name or self._func_impl.__name__,
+            name=self._name,
             parameters=self._parameters,
             func_impl=self._func_impl,
             module=self._module or cast(ModuleType, inspect.getmodule(self._func_impl)),

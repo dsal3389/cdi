@@ -5,6 +5,12 @@ _T = TypeVar("_T")
 
 
 class Registry(Generic[_T]):
+    """
+    a helper class that items can be added into and the items keys will
+    be calculated based on the provided `key_factory` in the init, thus providing
+    consistant key generation and prevents the key generation in multiple places
+    """
+
     def __init__(self, key_factory: Callable[[_T], Hashable]) -> None:
         self._key_factory = key_factory
         self._items = {}

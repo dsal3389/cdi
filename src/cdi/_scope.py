@@ -3,7 +3,7 @@ from typing import Any
 
 from ._container import Container
 from ._factory import Factory, ParameterKind
-from ._exceptions import IncorrectStackPopping, CircularDependencyError
+from ._exceptions import IncorrectStackPopping, CircularDependencyError, NoFactoryForTypeError
 from ._registry import Registry
 
 
@@ -36,11 +36,11 @@ class Scope:
         self._stack.append(type_)
 
         try:
-            if factory := self._container.get_factory(type_):
+            if factory := self._container._get_factory(type_):
                 instance = self._instantiate_from_factory(factory)
                 self._instances.add(instance)
             else:
-                instance = None
+                raise NoFactoryForTypeError(tuple(self._stack), type_)
         finally:
             popped = self._stack.pop()
             if popped is not type_:
