@@ -76,6 +76,10 @@ assert instance.field == "foo"
 * Typevars as injectable return type
 
 
+### Explicit is better then implicit
+the library tries to make you explicit with your typing without compromising
+readability or ease of use
+
 # Documentation
 
 ## Container
@@ -208,4 +212,52 @@ scope2_instance = scope.get_instance(Foo)
 # a different scopes don't have access to each other instances 
 # although they are using the same container
 assert scope2_instance is not instance
+```
+
+### inheritance
+scopes can inherit parent and child like inheritance, the parent has no access to the child
+but the child does have access to the parent
+
+there is no unique behavior for the child/parent scope when they aquire the relevant roles, this is mostly
+for ease of use, the real inheritance comes into play via `InjectableMetadata`
+
+## annotation Metadata
+you can change some default behaviors of the injectable type but in a way that make
+sense, meaning, if you annotate `str` you cannot return `int`
+
+types annotated with a metdata class `InjectableMetadata` is able to control some default behavior
+of the scope 
+
+### provider_scope
+accepts a `Callable[[Scope], Scope]`, this effect which scope will instantiate the annotated type
+the returned scope will be used for the type instanciation
+
+```py
+ctr = cdi.Container()
+ctr2 = cdi.Container()
+
+cdi.Injctable(ctr=ctr).register("hello world")
+cdi.Injctable(ctr=ctr2).register("what?")
+
+scope = Scope(__name__, ctr=ctr)
+scope2 = scope.fork()
+
+
+@cdi.Injectable(ctr=ctr2)
+class Foo:
+    def __init__(
+        self,
+        value1: str,
+        value2: Annotated[
+            str, 
+            cdi.InjectableMetadata(provider_scope=lambda scope: scope.parent)  # get the str from the parent scope
+        ]
+    ) -> None:
+        self.value1 = value1
+        self.value2 = value2
+
+
+instance = scope2.get_instance(Foo)
+assert instance.value1 == "what?"
+assert instance.value2 == "hello world"
 ```

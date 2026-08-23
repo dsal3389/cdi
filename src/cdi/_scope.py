@@ -25,7 +25,7 @@ class Scope:
         self._container = container
         self._instances = Registry(type)
 
-        self._stack = []
+        self._stack: list[type] = []
         self._lock = threading.RLock()
 
     @property
@@ -42,28 +42,27 @@ class Scope:
         )
 
     def get_instance(self, type_: Any) -> Any:
-        exceptions = []
         for type_ in _unwrap_union(type_):
-            if get_origin(type_) is Annotated:
-                metadata = _get_annotated_injectable_metadata(type_)
-                type_, *_ = get_args(type_)
+            try:
+                if get_origin(type_) is Annotated:
+                    # we look for the relevant metadata and also update the real
+                    # value of the annontated type
+                    metadata = _get_annotated_injectable_metadata(type_)
+                    type_, *_ = get_args(type_)
 
-                if metadata:
-                    if metadata._provider_scope is not None:
-                        provider_scope = metadata._provider_scope(self)
+                    if metadata:
+                        if metadata._provider_scope is not None:
+                            provider_scope = metadata._provider_scope(self)
 
-                        if provider_scope is not self:
-                            return provider_scope.get_instance(type_)
-                return self.get_instance(type_)
-            else:
-                try:
+                            if provider_scope is not self:
+                                return provider_scope.get_instance(type_)
+                    return self.get_instance(type_)
+                else:
                     return self._get_unwrapped_type(type_)
-                except NoFactoryForTypeError as e:
-                    exceptions.append(e)
+            except NoFactoryForTypeError:
+                pass
         raise TypeEvaluationError(
-            f"failed to evaluate type `{type_}` with exceptions:"
-            + "\n  "
-            + "\n  ".join(map(str, exceptions))
+            f"{self} failed to evaluate type `{type_}`"
         )
 
     def _get_unwrapped_type(self, type_: type) -> Any:
@@ -89,7 +88,7 @@ class Scope:
                 popped = self._stack.pop()
                 if popped is not type_:
                     raise IncorrectStackPopping(
-                        f"incorrect scope stack popping for {self}, expected `{type_.__name__}`, popped `{popped.__name__}`"
+                        f"{self} incorrect scope stack popping for {self}, expected `{type_.__name__}`, popped `{popped.__name__}`"
                     )
             return instance
 
