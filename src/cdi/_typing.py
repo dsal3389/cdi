@@ -27,7 +27,9 @@ def _as_forward_ref(v: ForwardRef | str) -> ForwardRef:
 def _unwrap_union(type_: Any) -> Iterable[Any]:
     if origin := get_origin(type_):
         if origin is UnionType:
-            yield from itertools.chain.from_iterable(map(_unwrap_union, get_args(type_)))
+            yield from itertools.chain.from_iterable(
+                map(_unwrap_union, get_args(type_))
+            )
     yield type_
 
 

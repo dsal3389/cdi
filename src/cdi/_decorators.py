@@ -97,20 +97,20 @@ class Injectable:
 
         self._ctr.register(
             FactoryBuilder()
-                .with_name(func.__name__)  # type: ignore
-                .with_module(module)
-                .with_parameters(parameters)
-                .with_func_impl(func)
-                .with_return_type(rt)
-                .build()
+            .with_name(func.__name__)  # type: ignore
+            .with_module(module)
+            .with_parameters(parameters)
+            .with_func_impl(func)
+            .with_return_type(rt)
+            .build()
         )
 
     def _inject_constant(self, constant: Any) -> None:
         self._ctr.register(
             FactoryBuilder()
-                .with_name(str(constant))
-                .with_func_impl(lambda: constant)
-                .with_return_type(type(constant))
-                .with_module(cast(ModuleType, inspect.getmodule(constant)))
-                .build()
+            .with_name(str(constant))
+            .with_func_impl(lambda: constant)
+            .with_return_type(type(constant))
+            .with_module(cast(ModuleType, inspect.getmodule(constant)))
+            .build()
         )

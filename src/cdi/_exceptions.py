@@ -12,11 +12,14 @@ __all__ = (
     "CircularDependencyError",
 )
 
+
 def _stack_traceback_message(stack: Iterable[type]) -> str:
     traceback = []
     for i, stack_type in enumerate(stack, start=1):
         module = cast(ModuleType, inspect.getmodule(stack_type))
-        traceback.append(("  " * i) + f"-> {module.__name__} - {stack_type.__qualname__}")
+        traceback.append(
+            ("  " * i) + f"-> {module.__name__} - {stack_type.__qualname__}"
+        )
     return "\n".join(traceback)
 
 
@@ -29,11 +32,7 @@ class IncorrectStackPopping(CdiError):
 
 
 class NoFactoryForTypeError(CdiError):
-    def __init__(
-        self,
-        stack: tuple[type, ...],
-        type_: type
-    ) -> None:
+    def __init__(self, stack: tuple[type, ...], type_: type) -> None:
         message = (
             f"No factory was provided for required type `{type_}`, backtrace:\n"
             + _stack_traceback_message(stack)

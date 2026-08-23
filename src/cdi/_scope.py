@@ -6,13 +6,20 @@ from types import UnionType, NoneType
 
 from ._container import Container
 from ._factory import Factory, ParameterKind
-from ._exceptions import IncorrectStackPopping, CircularDependencyError, NoFactoryForTypeError, TypeEvaluationError
+from ._exceptions import (
+    IncorrectStackPopping,
+    CircularDependencyError,
+    NoFactoryForTypeError,
+    TypeEvaluationError,
+)
 from ._registry import Registry
 from ._typing import _unwrap_union
 
 
 class Scope:
-    def __init__(self, name: str, *, container: Container, parent: Scope | None = None) -> None:
+    def __init__(
+        self, name: str, *, container: Container, parent: Scope | None = None
+    ) -> None:
         self._name = name
         self._parent = parent
         self._container = container
@@ -31,9 +38,7 @@ class Scope:
 
     def fork(self, name: str | None = None) -> Scope:
         return Scope(
-            name=name or (self.name + "-fork"),
-            container=self._container,
-            parent=self
+            name=name or (self.name + "-fork"), container=self._container, parent=self
         )
 
     def get_instance(self, type_: type | UnionType) -> Any:
@@ -49,7 +54,8 @@ class Scope:
                 exceptions.append(e)
         raise TypeEvaluationError(
             f"failed to evaluate type `{type_}` with exceptions:"
-            + "\n  " + "\n  ".join(map(str, exceptions))
+            + "\n  "
+            + "\n  ".join(map(str, exceptions))
         )
 
     def _get_unwrapped_type(self, type_: type) -> Any:
@@ -64,9 +70,7 @@ class Scope:
             return instance
 
         if type_ in self._stack:
-            raise CircularDependencyError(
-                tuple(self._stack), type_
-            )
+            raise CircularDependencyError(tuple(self._stack), type_)
 
         self._stack.append(type_)
 

@@ -32,8 +32,7 @@ def _evaluate_partial_factory(factory: Factory) -> Factory:
             continue
 
         annotation = FactoryParameterEvaluatorProxy(
-            factory=factory,
-            evaluator=TypeModuleEvaluator(parameter.module)
+            factory=factory, evaluator=TypeModuleEvaluator(parameter.module)
         ).evaluate((name, parameter))
 
         evaluated_parameters[name] = FactoryParameter(
@@ -43,12 +42,12 @@ def _evaluate_partial_factory(factory: Factory) -> Factory:
         )
     return (
         FactoryBuilder()
-            .with_name(factory.name)
-            .with_module(factory.module)
-            .with_func_impl(factory.implementor_func)
-            .with_parameters(evaluated_parameters)
-            .with_return_type(factory.return_type)
-            .build()
+        .with_name(factory.name)
+        .with_module(factory.module)
+        .with_func_impl(factory.implementor_func)
+        .with_parameters(evaluated_parameters)
+        .with_return_type(factory.return_type)
+        .build()
     )
 
 
