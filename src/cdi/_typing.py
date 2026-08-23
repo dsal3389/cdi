@@ -1,6 +1,7 @@
-from collections.abc import Sequence
+import itertools
+from collections.abc import Sequence, Iterable
 
-from types import GenericAlias
+from types import GenericAlias, UnionType
 from typing import TypeVar, Generic, ForwardRef, Any, get_origin, get_args, cast
 
 __all__ = (
@@ -21,6 +22,13 @@ def _as_forward_ref(v: ForwardRef | str) -> ForwardRef:
     if not isinstance(v, ForwardRef):
         return ForwardRef(v)
     return v
+
+
+def _unwrap_union(type_: Any) -> Iterable[Any]:
+    if origin := get_origin(type_):
+        if origin is UnionType:
+            yield from itertools.chain.from_iterable(map(_unwrap_union, get_args(type_)))
+    yield type_
 
 
 def is_forward_ref(value: Any) -> bool:

@@ -30,7 +30,6 @@ class TypeMapEvaluator:
         raise TypeEvaluationError(
             f"couldn't evaluate forward reference `{type_}` from given mapping, available types were: "
             + ", ".join(self._map.keys()),
-            type_name=type_,
         )
 
 
@@ -50,7 +49,6 @@ class TypeModuleEvaluator:
         except NameError:
             raise TypeEvaluationError(
                 f"couldn't evaluate forward reference `{type_.__forward_arg__}` from given module `{self._module}`",
-                type_name=type_.__forward_arg__,
             )
 
 
@@ -71,6 +69,5 @@ class FactoryParameterEvaluatorProxy:
             return self._evaluator.evaluate(parameter.annotation)
         except TypeEvaluationError as e:
             raise TypeEvaluationError(
-                f"couldn't evaluate factory parameter `{self._factory.name}({name}: {e.type_name}, ...)`",
-                type_name=e.type_name,
+                f"couldn't evaluate factory parameter `{self._factory.name}({name}: {parameter.annotation}, ...)`",
             )

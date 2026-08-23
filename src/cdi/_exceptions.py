@@ -42,17 +42,7 @@ class NoFactoryForTypeError(CdiError):
 
 
 class TypeEvaluationError(CdiError):
-    def __init__(
-        self,
-        message: str,
-        type_name: str,
-    ) -> None:
-        super().__init__(message)
-        self._type_name = type_name
-
-    @property
-    def type_name(self) -> str:
-        return self._type_name
+    pass
 
 
 class CircularDependencyError(CdiError):

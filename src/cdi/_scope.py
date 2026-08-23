@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 import threading
-from typing import Any
+from typing import Any, Hashable
+from types import UnionType, NoneType
 
 from ._container import Container
 from ._factory import Factory, ParameterKind
-from ._exceptions import IncorrectStackPopping, CircularDependencyError, NoFactoryForTypeError
+from ._exceptions import IncorrectStackPopping, CircularDependencyError, NoFactoryForTypeError, TypeEvaluationError
 from ._registry import Registry
+from ._typing import _unwrap_union
 
 
 class Scope:
@@ -34,11 +36,25 @@ class Scope:
             parent=self
         )
 
-    def get_instance(self, type_: type) -> Any:
+    def get_instance(self, type_: type | UnionType) -> Any:
         with self._lock:
             return self._get_instance(type_)
 
-    def _get_instance(self, type_: type) -> Any:
+    def _get_instance(self, type_: type | UnionType) -> Any:
+        exceptions = []
+        for type_ in _unwrap_union(type_):
+            try:
+                return self._get_unwrapped_type(type_)
+            except NoFactoryForTypeError as e:
+                exceptions.append(e)
+        raise TypeEvaluationError(
+            f"failed to evaluate type `{type_}` with exceptions:"
+            + "\n  " + "\n  ".join(map(str, exceptions))
+        )
+
+    def _get_unwrapped_type(self, type_: type) -> Any:
+        if type_ is NoneType:
+            return None
         if instance := self._instances.get(type_):
             return instance
 
