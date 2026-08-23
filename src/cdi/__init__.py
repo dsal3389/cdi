@@ -7,13 +7,14 @@ from ._exceptions import (
 )
 from ._scope import Scope
 from ._decorators import Injectable
-from ._typing import *
+from ._typing import InjectableMetadata
 
 
 __all__ = (
     "Scope",
     "Container",
     "Injectable",
+    "InjectableMetadata",
     "CdiError",
     "TypeEvaluationError",
     "IncorrectStackPopping",

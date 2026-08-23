@@ -1,13 +1,20 @@
+from __future__ import annotations
+
 import itertools
-from collections.abc import Sequence, Iterable
+from collections.abc import Sequence, Iterable, Callable
 
 from types import GenericAlias, UnionType
-from typing import TypeVar, Generic, ForwardRef, Any, get_origin, get_args, cast
+from typing import TYPE_CHECKING, TypeVar, Generic, ForwardRef, Any, get_origin, get_args, cast, Annotated
+
+if TYPE_CHECKING:
+    from ._scope import Scope
+
 
 __all__ = (
     "is_typevar",
     "is_forward_ref",
     "evaluate_forward_ref",
+    "InjectableMetadata"
 )
 
 
@@ -33,6 +40,13 @@ def _unwrap_union(type_: Any) -> Iterable[Any]:
     yield type_
 
 
+def _get_annotated_injectable_metadata(annotated: Annotated[Any, ...]) -> InjectableMetadata | None:
+    for arg in get_args(annotated)[1:]:
+        if isinstance(arg, InjectableMetadata):
+            return arg
+    return None
+
+
 def is_forward_ref(value: Any) -> bool:
     return isinstance(value, (str, ForwardRef))
 
@@ -48,3 +62,11 @@ def evaluate_forward_ref(
     if evaluated := forward_ref._evaluate(globalns, localns, frozenset()):
         return evaluated
     return None
+
+
+class InjectableMetadata:
+    def __init__(
+        self,
+        provider_scope: Callable[[Scope], Scope] | None = None
+    ) -> None:
+        self._provider_scope = provider_scope
