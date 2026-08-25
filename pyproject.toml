@@ -1,13 +1,15 @@
 [project]
 name = "cdi-di"
-version = "0.0.1-b2"
+version = "0.0.1-b3"
 description = "Python dependency injection made easy"
 readme = "README.md"
 authors = [
     { name = "daniel sonbolian", email = "dsal3389@gmail.com" }
 ]
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "typing-extensions>=4.15.0",
+]
 
 [project.urls]
 Repository = "https://github.com/dsal3389/cdi"
