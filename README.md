@@ -1,6 +1,10 @@
 # cdi
-stands for "cute dependency injector" I guess?
+stands for "cute dependency injector" I guess(?)
 
+## install
+```sh
+pip install cdi-di
+```
 
 ## Dependency injection made easy
 while some python dependency injectors require some setup and make some things
