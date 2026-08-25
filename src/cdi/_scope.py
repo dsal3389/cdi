@@ -42,36 +42,47 @@ class Scope:
         )
 
     def get_instance(self, type_: Any) -> Any:
+        return self._get_instance(type_, evaluate=True)
+
+    def _get_instance(self, type_: Any, evaluate: bool) -> Any:
         for type_ in _unwrap_union(type_):
             try:
-                if get_origin(type_) is Annotated:
-                    # we look for the relevant metadata and also update the real
-                    # value of the annontated type
-                    metadata = _get_annotated_injectable_metadata(type_)
-                    type_, *_ = get_args(type_)
+                scope = self
+                origin = get_origin(type_)
 
-                    if metadata:
-                        if metadata._provider_scope is not None:
-                            provider_scope = metadata._provider_scope(self)
+                if origin is not None:
+                    if origin is Annotated:
+                        # we look for the relevant metadata and also update the real
+                        # value of the annontated type
+                        type_, metadata = _get_annotated_injectable_metadata(type_)
+                        origin = get_origin(type_)  # update the origin type
 
-                            if provider_scope is not self:
-                                return provider_scope.get_instance(type_)
-                    return self.get_instance(type_)
-                else:
-                    return self._get_unwrapped_type(type_)
-            except NoFactoryForTypeError:
+                        if metadata:
+                            evaluate = metadata._evaluate
+                            if metadata._provider_scope is not None:
+                                scope = metadata._provider_scope(self)
+                        # if the type was wrapped with `Annotated` we want to
+                        # call `_get_instance` to instantiate the real type
+                        return scope._get_instance(type_, evaluate=evaluate)
+                return scope._get_unwrapped_type(type_, evaluate=evaluate)
+            except (NoFactoryForTypeError, TypeEvaluationError):
                 pass
         raise TypeEvaluationError(
             f"{self} failed to evaluate type `{type_}`"
         )
 
-    def _get_unwrapped_type(self, type_: type) -> Any:
+    def _get_unwrapped_type(self, type_: type, evaluate: bool) -> Any:
         if type_ is NoneType:
             return None
 
         with self._lock:
             if instance := self._instances.get(type_):
                 return instance
+
+            if not evaluate:
+                raise TypeEvaluationError(
+                    f"{self} couldn't find existing instance for `{type_.__name__}` and couldn't evaluate the type"
+                )
 
             if type_ in self._stack:
                 raise CircularDependencyError(tuple(self._stack), type_)

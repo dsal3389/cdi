@@ -1,11 +1,12 @@
 from __future__ import annotations
-from typing import Hashable
+from typing import Hashable, ForwardRef
 
 import threading
 from types import ModuleType
 
 from ._typing import is_forward_ref, is_typevar
-from ._evaluator import FactoryParameterEvaluatorProxy, TypeModuleEvaluator
+from ._exceptions import ResolveForwardRefError
+from ._fr_resolver import ForwardRefResolver, ForwardRefResolveByModuleStrategy
 from ._factory import Factory, FactoryParameter, FactoryParameters, FactoryBuilder
 from ._registry import Registry
 
@@ -26,14 +27,32 @@ def _is_partial_factory(factory: Factory) -> bool:
 def _evaluate_partial_factory(factory: Factory) -> Factory:
     evaluated_parameters = FactoryParameters({})
 
+    if is_forward_ref(factory.return_type):
+        try:
+            rt = ForwardRefResolver(
+                strategy=ForwardRefResolveByModuleStrategy(factory.module)
+            ).resolve(factory.return_type)
+        except ResolveForwardRefError:
+            raise ResolveForwardRefError(
+                f"coudln't resolve forward reference for factory `{factory.name}` return type `{factory.return_type}`,"
+                + f"`{factory.name}(...) -> {factory.return_type}`"
+            )
+    else:
+        rt = factory.return_type
+
     for name, parameter in factory.parameters.items():
-        if not is_forward_ref(parameter.annotation):
+        if not isinstance(parameter.annotation, (ForwardRef, str)):
             evaluated_parameters[name] = parameter
             continue
 
-        annotation = FactoryParameterEvaluatorProxy(
-            factory=factory, evaluator=TypeModuleEvaluator(parameter.module)
-        ).evaluate((name, parameter))
+        try:
+            annotation = ForwardRefResolver(
+                strategy=ForwardRefResolveByModuleStrategy(parameter.module)
+            ).resolve(parameter.annotation)
+        except ResolveForwardRefError:
+            raise ResolveForwardRefError(
+                f"coudln't resolve forward reference for factory `{factory.name}` parameter name `{name}`, `{factory.name}({name}: {type(parameter.annotation)}, ...)`"
+            )
 
         evaluated_parameters[name] = FactoryParameter(
             annotation=annotation,
@@ -46,7 +65,7 @@ def _evaluate_partial_factory(factory: Factory) -> Factory:
         .with_module(factory.module)
         .with_func_impl(factory.implementor_func)
         .with_parameters(evaluated_parameters)
-        .with_return_type(factory.return_type)
+        .with_return_type(rt)
         .build()
     )
 

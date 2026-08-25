@@ -40,11 +40,12 @@ def _unwrap_union(type_: Any) -> Iterable[Any]:
     yield type_
 
 
-def _get_annotated_injectable_metadata(annotated: Annotated[Any, ...]) -> InjectableMetadata | None:
-    for arg in get_args(annotated)[1:]:
+def _get_annotated_injectable_metadata(annotated: Annotated[Any, ...]) -> tuple[type, InjectableMetadata | None]:
+    type_, *args = get_args(annotated)
+    for arg in args:
         if isinstance(arg, InjectableMetadata):
-            return arg
-    return None
+            return (type_, arg)
+    return (type, None)
 
 
 def is_forward_ref(value: Any) -> bool:
@@ -67,6 +68,8 @@ def evaluate_forward_ref(
 class InjectableMetadata:
     def __init__(
         self,
-        provider_scope: Callable[[Scope], Scope] | None = None
+        provider_scope: Callable[[Scope], Scope] | None = None,
+        evaluate: bool = True,
     ) -> None:
         self._provider_scope = provider_scope
+        self._evaluate = evaluate

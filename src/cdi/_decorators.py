@@ -5,8 +5,8 @@ from types import ModuleType
 from typing import TypeVar, Any, cast
 
 from ._container import Container
-from ._evaluator import TypeModuleEvaluator
-from ._exceptions import TypeEvaluationError
+from ._fr_resolver import ForwardRefResolver, ForwardRefResolveByModuleStrategy
+from ._exceptions import ResolveForwardRefError
 from ._factory import MroParameters, FuncParameters, FactoryBuilder
 from ._typing import is_forward_ref
 
@@ -91,8 +91,10 @@ class Injectable:
 
         if is_forward_ref(rt):
             try:
-                rt = TypeModuleEvaluator(module).evaluate(rt)
-            except TypeEvaluationError:
+                rt = ForwardRefResolver(
+                    strategy=ForwardRefResolveByModuleStrategy(module)
+                ).resolve(rt)
+            except ResolveForwardRefError:
                 pass
 
         self._ctr.register(

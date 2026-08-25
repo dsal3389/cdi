@@ -9,8 +9,8 @@ from collections.abc import Sequence, Callable
 
 from typing_extensions import Self
 
-from ._exceptions import TypeEvaluationError
-from ._evaluator import TypeModuleEvaluator
+from ._fr_resolver import ForwardRefResolver, ForwardRefResolveByModuleStrategy
+from ._exceptions import ResolveForwardRefError
 from ._typing import _get_type_vars, is_typevar, is_forward_ref
 
 
@@ -103,7 +103,9 @@ class MroParameters:
             signature = inspect.signature(method, eval_str=False)
 
             module = cast(ModuleType, inspect.getmodule(mro_cls))
-            type_evaluator = TypeModuleEvaluator(module)
+            resolver = ForwardRefResolver(
+                strategy=ForwardRefResolveByModuleStrategy(module)
+            )
 
             for name, parameter in signature.parameters.items():
                 # if we already processed the parameter with the same name
@@ -122,8 +124,8 @@ class MroParameters:
 
                 if is_forward_ref(annotation):
                     try:
-                        annotation = type_evaluator.evaluate(parameter.annotation)
-                    except TypeEvaluationError:
+                        annotation = resolver.resolve(parameter.annotation)
+                    except ResolveForwardRefError:
                         pass
 
                 if (
@@ -152,7 +154,9 @@ class FuncParameters:
         signature = inspect.signature(func)
 
         module = cast(ModuleType, inspect.getmodule(func))
-        type_evaluator = TypeModuleEvaluator(module)
+        resolver = ForwardRefResolver(
+            strategy=ForwardRefResolveByModuleStrategy(module)
+        )
 
         for name, parameter in signature.parameters.items():
             match parameter.kind:
@@ -167,8 +171,8 @@ class FuncParameters:
 
             if is_forward_ref(annotation):
                 try:
-                    annotation = type_evaluator.evaluate(annotation)
-                except TypeEvaluationError:
+                    annotation = resolver.resolve(annotation)
+                except ResolveForwardRefError:
                     pass
 
             parameters[name] = FactoryParameter(
