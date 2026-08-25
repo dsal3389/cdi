@@ -1,7 +1,7 @@
 [project]
-name = "cdi"
-version = "0.1.0"
-description = "Add your description here"
+name = "cdi-di"
+version = "0.0.1-b2"
+description = "Python dependency injection made easy"
 readme = "README.md"
 authors = [
     { name = "daniel sonbolian", email = "dsal3389@gmail.com" }
@@ -9,12 +9,17 @@ authors = [
 requires-python = ">=3.11"
 dependencies = []
 
+[project.urls]
+Repository = "https://github.com/dsal3389/cdi"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/cdi"]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [dependency-groups]
 dev = [
-    "pyright>=1.1.407",
     "pytest>=8.4.2",
 ]
