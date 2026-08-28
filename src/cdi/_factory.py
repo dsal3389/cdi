@@ -227,6 +227,9 @@ class Factory(Generic[T]):
     def __call__(self, *args, **kwargs) -> T:
         return self._func(*args, **kwargs)
 
+    def __str__(self) -> str:
+        return f"Factory<{self._name}>({self._parameters}) -> {self._return_type}"
+
 
 class FactoryBuilder:
     def __init__(self) -> None:

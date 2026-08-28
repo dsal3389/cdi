@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import threading
-from typing import Any, get_origin, Annotated, get_args
+from typing import Any, get_origin, Annotated
 from types import NoneType
 
 from ._container import Container
@@ -12,7 +12,7 @@ from ._exceptions import (
     NoFactoryForTypeError,
     TypeEvaluationError,
 )
-from ._registry import Registry
+from ._tree import PrefixTree, PrefixTreeTypeFindStrategy, type_as_prefix_steps
 from ._typing import _unwrap_union, _get_annotated_injectable_metadata
 
 
@@ -23,7 +23,7 @@ class Scope:
         self._name = name
         self._parent = parent
         self._container = container
-        self._instances = Registry(type)
+        self._instances = PrefixTree(find_strategy=PrefixTreeTypeFindStrategy()) # Registry(type)
 
         self._stack: list[type] = []
         self._lock = threading.RLock()
@@ -76,7 +76,8 @@ class Scope:
             return None
 
         with self._lock:
-            if instance := self._instances.get(type_):
+            tree_prefix = type_as_prefix_steps(type_)
+            if instance := self._instances.find(tree_prefix):
                 return instance
 
             if not evaluate:
@@ -92,7 +93,8 @@ class Scope:
             try:
                 if factory := self._container._get_factory(type_):
                     instance = self._instantiate_from_factory(factory)
-                    self._instances.add(instance)
+                    self._instances.insert(tree_prefix, instance)
+                    return instance
                 else:
                     raise NoFactoryForTypeError(tuple(self._stack), type_)
             finally:
@@ -101,7 +103,6 @@ class Scope:
                     raise IncorrectStackPopping(
                         f"{self} incorrect scope stack popping for {self}, expected `{type_.__name__}`, popped `{popped.__name__}`"
                     )
-            return instance
 
     def _instantiate_from_factory(self, factory: Factory) -> Any:
         positional_arguments = []

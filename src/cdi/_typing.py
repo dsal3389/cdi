@@ -4,7 +4,7 @@ import itertools
 from collections.abc import Sequence, Iterable, Callable
 
 from types import GenericAlias, UnionType
-from typing import TYPE_CHECKING, TypeVar, Generic, ForwardRef, Any, get_origin, get_args, cast, Annotated
+from typing import TYPE_CHECKING, TypeVar, Generic, ForwardRef, Any, get_origin, get_args, cast, Annotated, Union
 
 if TYPE_CHECKING:
     from ._scope import Scope
@@ -33,7 +33,7 @@ def _as_forward_ref(v: ForwardRef | str) -> ForwardRef:
 
 def _unwrap_union(type_: Any) -> Iterable[Any]:
     if origin := get_origin(type_):
-        if origin is UnionType:
+        if origin in (UnionType, Union):
             yield from itertools.chain.from_iterable(
                 map(_unwrap_union, get_args(type_))
             )

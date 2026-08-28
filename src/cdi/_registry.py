@@ -1,5 +1,7 @@
-from collections.abc import Callable, Hashable
+from __future__ import annotations
+
 from typing import Generic, TypeVar
+from collections.abc import Callable, Hashable
 
 _T = TypeVar("_T")
 
