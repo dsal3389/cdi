@@ -89,7 +89,7 @@ class Container:
         self._partially_initialized: list[Factory] = []
         self._lock = threading.Lock()
 
-    def register(self, factory: Factory) -> None:
+    def _register(self, factory: Factory) -> None:
         """
         registers the given factory with the scope, the factory return type
         will be used as key when calling the container `get_factory` and providing a type

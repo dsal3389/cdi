@@ -35,7 +35,9 @@ def _get_typevar_mapping(typealias: TypeAliasType) -> dict[TypeVar, Any]:
     origin = get_origin(typealias)
     mapping = {}
 
-    for typevar, value in zip(_get_typevars(origin.__orig_bases__), get_args(typealias)):
+    for typevar, value in zip(
+        _get_typevars(origin.__orig_bases__), get_args(typealias)
+    ):
         mapping[typevar] = value
     return mapping
 

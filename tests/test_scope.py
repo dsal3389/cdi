@@ -22,6 +22,7 @@ class FooGeneric(Generic[T]):
         self.x = x
         self.y = y
 
+
 class FooChildGeneric(Generic[T], FooGeneric[T]):
     pass
 
@@ -52,7 +53,6 @@ def test_scope_basic(scope: cdi.Scope):
 
 
 def test_scope_typealiases(ctr: cdi.Container, scope: cdi.Scope):
-
     @cdi.Injectable(ctr)
     def create_generic_str() -> FooChildGeneric[str]:
         return FooChildGeneric("hello", "world")

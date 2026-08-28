@@ -74,7 +74,7 @@ class Injectable:
 
     def _inject_class_factory(self, cls: type) -> None:
         parameters = MroParameters().get_parameters(inspect.getmro(cls), "__init__")
-        self._ctr.register(
+        self._ctr._register(
             FactoryBuilder()
             .with_name(f"{cls.__name__}.__init__")
             .with_func_impl(getattr(cls, "__call__"))
@@ -97,7 +97,7 @@ class Injectable:
             except ResolveForwardRefError:
                 pass
 
-        self._ctr.register(
+        self._ctr._register(
             FactoryBuilder()
             .with_name(func.__name__)  # type: ignore
             .with_module(module)
@@ -108,7 +108,7 @@ class Injectable:
         )
 
     def _inject_constant(self, constant: Any) -> None:
-        self._ctr.register(
+        self._ctr._register(
             FactoryBuilder()
             .with_name(str(constant))
             .with_func_impl(lambda: constant)

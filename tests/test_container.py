@@ -54,15 +54,14 @@ def test_with_generics():
     class Foo(Generic[T, V]):
         def __init__(self, x: T, y: V) -> None: ...
 
-
     @cdi.Injectable(ctr)
     def specific() -> Foo[str, str]:
         return Foo("foo", "foo")
 
     assert (foo_factory := ctr._get_factory(Foo))
-    assert (foo_factory is ctr._get_factory(Foo[int, str]))
-    assert (foo_factory is ctr._get_factory(Foo[T, str]))
-    assert (foo_factory is not ctr._get_factory(Foo[str, str]))
+    assert foo_factory is ctr._get_factory(Foo[int, str])
+    assert foo_factory is ctr._get_factory(Foo[T, str])
+    assert foo_factory is not ctr._get_factory(Foo[str, str])
 
     assert "x" in foo_factory.parameters
     assert "y" in foo_factory.parameters

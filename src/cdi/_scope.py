@@ -13,7 +13,12 @@ from ._exceptions import (
     TypeEvaluationError,
 )
 from ._tree import PrefixTree, PrefixTreeTypeFindStrategy, type_as_prefix_steps
-from ._typing import _unwrap_union, _get_annotated_injectable_metadata, _get_typevar_mapping, is_typealias
+from ._typing import (
+    _unwrap_union,
+    _get_annotated_injectable_metadata,
+    _get_typevar_mapping,
+    is_typealias,
+)
 
 
 class Scope:
@@ -23,9 +28,7 @@ class Scope:
         self._name = __name
         self._parent = parent
         self._container = container
-        self._instances = PrefixTree(
-            find_strategy=PrefixTreeTypeFindStrategy()
-        )
+        self._instances = PrefixTree(find_strategy=PrefixTreeTypeFindStrategy())
 
         self._stack: list[type] = []
         self._lock = threading.RLock()
@@ -36,14 +39,23 @@ class Scope:
 
     @property
     def parent(self) -> Scope | None:
+        """returns the parent of the scope if any"""
         return self._parent
 
     def fork(self, name: str | None = None) -> Scope:
+        """
+        forks the scope, creating a sub scope that has the same container
+        as the current scope, and set the current scope as the parent
+        """
         return Scope(
             name or (self.name + "-fork"), container=self._container, parent=self
         )
 
     def get_instance(self, type_: Any) -> Any:
+        """
+        returns an instance of the given type, assuming some factory
+        is registered at the container level that can create the type
+        """
         return self._get_instance(type_, evaluate=True)
 
     def _get_instance(self, type_: Any, evaluate: bool) -> Any:
@@ -109,7 +121,9 @@ class Scope:
                         f"{self} incorrect scope stack popping for {self}, expected `{type_.__name__}`, popped `{popped.__name__}`"
                     )
 
-    def _instantiate_from_factory(self, factory: Factory, typevars: dict[TypeVar, Any]) -> Any:
+    def _instantiate_from_factory(
+        self, factory: Factory, typevars: dict[TypeVar, Any]
+    ) -> Any:
         positional_arguments = []
         keyword_arguments = {}
 
