@@ -40,7 +40,7 @@ instance = scope.get_instance(Foo)
 assert instance.number == 100
 ```
 
-## Support Generics
+## Support Generics/TypeAliase
 
 ```py
 import cdi 
@@ -73,10 +73,26 @@ instance = scope.get_instance(MyType)
 assert instance.field == "foo"
 ```
 
+```py
+ctr = cdi.Container()
+
+class Foo(Generic[T]):
+    def __init__(self, v: T):
+        self.v = v
+
+cdi.Injectable(ctr).register("hello world")
+cdi.Injectable(ctr).register(100)
+
+scope = Scope(__name__, container=ctr)
+assert scope.get_instance(Foo[int]).v == 100
+assert scope.get_instance(Foo[str]).v == "hello world"
+
+# even nested
+assert scope.get_instance(Foo[Foo[int]]).v.v == 100
+```
+
 ### what is not supported with generics (at least yet)
-* TypeAliases as parameters are not supported (i.e `list[int]`)
-* TypeAliases as injectable return type
-* TypeVars as parameters
+* TypeVars as parameters that are not used in return type
 * Typevars as injectable return type
 
 
