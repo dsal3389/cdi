@@ -64,6 +64,11 @@ class MroParameters:
         orig_bases = {}
 
         for mro_cls in mro:
+            if args := orig_bases.get(mro_cls):
+                typevar_to_value = {typevar: args[i] for i, typevar in enumerate(_get_type_vars(mro_cls.__orig_bases__))}
+            else:
+                typevar_to_value = {}
+
             # we walk over all the mro orig bases and look for generic aliases, this will
             # help us later when we see the generic alias origin in the mro, we can see what
             # generic arguments were passes to the orig base, for example
@@ -77,18 +82,10 @@ class MroParameters:
             for orig_base in cast(
                 tuple[GenericAlias | type], getattr(mro_cls, "__orig_bases__", ())
             ):
-                if (origin := get_origin(orig_base)) is None or origin is Generic:
-                    continue
-
-                args = get_args(orig_base)
-                orig_bases[origin] = list(
-                    zip(_get_type_vars(origin.__orig_bases__), args)
-                )
-
-            if args := orig_bases.get(mro_cls):
-                typevar_to_value = {typevar: value for typevar, value in args}
-            else:
-                typevar_to_value = {}
+                if (origin := get_origin(orig_base)) is not None and origin is not Generic:
+                    # if we have origin that is not `Generic`, and we see that we pass to it typevars
+                    # we try to resolve the typevars to the real value
+                    orig_bases[origin] = list(typevar_to_value.get(arg, arg) for arg in get_args(orig_base))
 
             # we look for the method in the current class, if it is not defined, we move
             # to the next mro class, we do not want to use `getatter` here because it will
