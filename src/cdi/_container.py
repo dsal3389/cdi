@@ -19,7 +19,7 @@ def _is_partial_factory(factory: Factory) -> bool:
         return False
 
     for parameter in factory.parameters.values():
-        if is_forward_ref(parameter.annotation) or is_typevar(parameter.annotation):
+        if is_forward_ref(parameter.annotation):
             return False
     return True
 
