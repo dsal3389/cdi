@@ -2,7 +2,7 @@ from __future__ import annotations
 from typing import Generic, TypeVar, get_origin, get_args
 from collections.abc import Sequence
 
-from ._typing import is_typevar, _get_type_vars
+from ._typing import is_typevar, _get_typevars
 
 _T = TypeVar("_T")
 _V = TypeVar("_V")
@@ -37,7 +37,7 @@ def type_as_prefix_steps(type_: type) -> Sequence[type]:
     """
     if origin := get_origin(type_):
         return (origin, *_standarize_args(get_args(type_)))
-    elif typevars := _get_type_vars(getattr(type_, "__orig_bases__", ())):
+    elif typevars := _get_typevars(getattr(type_, "__orig_bases__", ())):
         return (type_, *_standarize_args(typevars))
     else:
         return (type_,)

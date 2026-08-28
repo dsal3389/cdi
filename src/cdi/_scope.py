@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import threading
-from typing import Any, get_origin, Annotated
 from types import NoneType
+from typing import Any, get_origin, Annotated, TypeVar
 
 from ._container import Container
 from ._factory import Factory, ParameterKind
@@ -13,14 +13,14 @@ from ._exceptions import (
     TypeEvaluationError,
 )
 from ._tree import PrefixTree, PrefixTreeTypeFindStrategy, type_as_prefix_steps
-from ._typing import _unwrap_union, _get_annotated_injectable_metadata
+from ._typing import _unwrap_union, _get_annotated_injectable_metadata, _get_typevar_mapping, is_typealias
 
 
 class Scope:
     def __init__(
-        self, name: str, *, container: Container, parent: Scope | None = None
+        self, __name: str, /, *, container: Container, parent: Scope | None = None
     ) -> None:
-        self._name = name
+        self._name = __name
         self._parent = parent
         self._container = container
         self._instances = PrefixTree(
@@ -40,7 +40,7 @@ class Scope:
 
     def fork(self, name: str | None = None) -> Scope:
         return Scope(
-            name=name or (self.name + "-fork"), container=self._container, parent=self
+            name or (self.name + "-fork"), container=self._container, parent=self
         )
 
     def get_instance(self, type_: Any) -> Any:
@@ -91,12 +91,17 @@ class Scope:
             self._stack.append(type_)
 
             try:
-                if factory := self._container._get_factory(type_):
-                    instance = self._instantiate_from_factory(factory)
-                    self._instances.insert(tree_prefix, instance)
-                    return instance
-                else:
+                if not (factory := self._container._get_factory(type_)):
                     raise NoFactoryForTypeError(tuple(self._stack), type_)
+
+                if is_typealias(type_):
+                    typevars = _get_typevar_mapping(type_)  # type: ignore
+                else:
+                    typevars = {}
+
+                instance = self._instantiate_from_factory(factory, typevars)
+                self._instances.insert(tree_prefix, instance)
+                return instance
             finally:
                 popped = self._stack.pop()
                 if popped is not type_:
@@ -104,12 +109,13 @@ class Scope:
                         f"{self} incorrect scope stack popping for {self}, expected `{type_.__name__}`, popped `{popped.__name__}`"
                     )
 
-    def _instantiate_from_factory(self, factory: Factory) -> Any:
+    def _instantiate_from_factory(self, factory: Factory, typevars: dict[TypeVar, Any]) -> Any:
         positional_arguments = []
         keyword_arguments = {}
 
         for name, parameter in factory.parameters.items():
-            value = self.get_instance(parameter.annotation)
+            annotation = typevars.get(parameter.annotation, parameter.annotation)
+            value = self.get_instance(annotation)
 
             match parameter.kind:
                 case ParameterKind.POSITIONAL:

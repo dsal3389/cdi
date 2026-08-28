@@ -36,8 +36,8 @@ class Injectable:
     ```
     """
 
-    def __init__(self, ctr: Container) -> None:
-        self._ctr = ctr
+    def __init__(self, __ctr: Container, /) -> None:
+        self._ctr = __ctr
 
     @property
     def container(self) -> Container:

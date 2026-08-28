@@ -11,7 +11,7 @@ from typing_extensions import Self
 
 from ._fr_resolver import ForwardRefResolver, ForwardRefResolveByModuleStrategy
 from ._exceptions import ResolveForwardRefError
-from ._typing import _get_type_vars, is_typevar, is_forward_ref
+from ._typing import _get_typevars, is_typevar, is_forward_ref
 
 
 T = TypeVar("T")
@@ -42,6 +42,9 @@ class FactoryParameter:
     def module(self) -> ModuleType:
         return self._module
 
+    def __str__(self) -> str:
+        return f"Parameter<{self._annotation}>"
+
 
 FactoryParameters = NewType("FactoryParameters", dict[str, FactoryParameter])
 
@@ -67,7 +70,7 @@ class MroParameters:
             if args := orig_bases.get(mro_cls):
                 typevar_to_value = {
                     typevar: args[i]
-                    for i, typevar in enumerate(_get_type_vars(mro_cls.__orig_bases__))
+                    for i, typevar in enumerate(_get_typevars(mro_cls.__orig_bases__))
                 }
             else:
                 typevar_to_value = {}
@@ -235,7 +238,7 @@ class Factory(Generic[T]):
         return self._func(*args, **kwargs)
 
     def __str__(self) -> str:
-        return f"Factory<{self._name}>({self._parameters}) -> {self._return_type}"
+        return f"Factory<{self._name}({self._parameters}) -> {self._return_type}>"
 
 
 class FactoryBuilder:
