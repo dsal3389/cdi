@@ -1,14 +1,14 @@
 from __future__ import annotations
-from typing import Hashable, ForwardRef
 
 import threading
 from types import ModuleType
+from typing import ForwardRef
 
 from ._typing import is_forward_ref, is_typevar
 from ._exceptions import ResolveForwardRefError
 from ._fr_resolver import ForwardRefResolver, ForwardRefResolveByModuleStrategy
 from ._factory import Factory, FactoryParameter, FactoryParameters, FactoryBuilder
-from ._registry import Registry
+from ._tree import PrefixTree, PrefixTreeTypeFindStrategy, type_as_prefix_steps
 
 
 __all__ = ("Container",)
@@ -19,7 +19,7 @@ def _is_partial_factory(factory: Factory) -> bool:
         return False
 
     for parameter in factory.parameters.values():
-        if is_forward_ref(parameter.annotation) or is_typevar(parameter.annotation):
+        if is_forward_ref(parameter.annotation):
             return False
     return True
 
@@ -31,7 +31,7 @@ def _evaluate_partial_factory(factory: Factory) -> Factory:
         try:
             rt = ForwardRefResolver(
                 strategy=ForwardRefResolveByModuleStrategy(factory.module)
-            ).resolve(factory.return_type)
+            ).resolve(factory.return_type)  # type: ignore
         except ResolveForwardRefError:
             raise ResolveForwardRefError(
                 f"coudln't resolve forward reference for factory `{factory.name}` return type `{factory.return_type}`,"
@@ -70,10 +70,6 @@ def _evaluate_partial_factory(factory: Factory) -> Factory:
     )
 
 
-def _factory_registry_key_impl(factory: Factory) -> Hashable:
-    return factory.return_type
-
-
 class Container:
     """
     container is a box that can store given factories of types but cannot create
@@ -87,7 +83,9 @@ class Container:
     """
 
     def __init__(self) -> None:
-        self._factory: Registry[Factory] = Registry(_factory_registry_key_impl)
+        self._factories: PrefixTree[type, Factory] = PrefixTree(
+            find_strategy=PrefixTreeTypeFindStrategy()
+        )
         self._partially_initialized: list[Factory] = []
         self._lock = threading.Lock()
 
@@ -99,7 +97,9 @@ class Container:
         is_partial = _is_partial_factory(factory)
         with self._lock:
             if is_partial:
-                self._factory.add(factory)
+                self._factories.insert(
+                    type_as_prefix_steps(factory.return_type), factory
+                )
             else:
                 self._partially_initialized.append(factory)
 
@@ -112,7 +112,10 @@ class Container:
 
         for factory in self._partially_initialized:
             if factory.module is module:
-                self._factory.add(_evaluate_partial_factory(factory))
+                self._factories.insert(
+                    type_as_prefix_steps(factory.return_type),
+                    _evaluate_partial_factory(factory),
+                )
             else:
                 partially_initialized.append(factory)
         self._partially_initialized = partially_initialized
@@ -121,5 +124,6 @@ class Container:
         """
         returns the correct factory for the requested type
         """
+        prefix = type_as_prefix_steps(type_)
         with self._lock:
-            return self._factory.get(type_)
+            return self._factories.find(prefix)

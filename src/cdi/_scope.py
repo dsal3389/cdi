@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import threading
-from typing import Any, get_origin, Annotated, get_args
 from types import NoneType
+from typing import Any, get_origin, Annotated, TypeVar
 
 from ._container import Container
 from ._factory import Factory, ParameterKind
@@ -12,18 +12,20 @@ from ._exceptions import (
     NoFactoryForTypeError,
     TypeEvaluationError,
 )
-from ._registry import Registry
-from ._typing import _unwrap_union, _get_annotated_injectable_metadata
+from ._tree import PrefixTree, PrefixTreeTypeFindStrategy, type_as_prefix_steps
+from ._typing import _unwrap_union, _get_annotated_injectable_metadata, _get_typevar_mapping, is_typealias
 
 
 class Scope:
     def __init__(
-        self, name: str, *, container: Container, parent: Scope | None = None
+        self, __name: str, /, *, container: Container, parent: Scope | None = None
     ) -> None:
-        self._name = name
+        self._name = __name
         self._parent = parent
         self._container = container
-        self._instances = Registry(type)
+        self._instances = PrefixTree(
+            find_strategy=PrefixTreeTypeFindStrategy()
+        )  # Registry(type)
 
         self._stack: list[type] = []
         self._lock = threading.RLock()
@@ -38,7 +40,7 @@ class Scope:
 
     def fork(self, name: str | None = None) -> Scope:
         return Scope(
-            name=name or (self.name + "-fork"), container=self._container, parent=self
+            name or (self.name + "-fork"), container=self._container, parent=self
         )
 
     def get_instance(self, type_: Any) -> Any:
@@ -67,16 +69,15 @@ class Scope:
                 return scope._get_unwrapped_type(type_, evaluate=evaluate)
             except (NoFactoryForTypeError, TypeEvaluationError):
                 pass
-        raise TypeEvaluationError(
-            f"{self} failed to evaluate type `{type_}`"
-        )
+        raise TypeEvaluationError(f"{self} failed to evaluate type `{type_}`")
 
     def _get_unwrapped_type(self, type_: type, evaluate: bool) -> Any:
         if type_ is NoneType:
             return None
 
         with self._lock:
-            if instance := self._instances.get(type_):
+            tree_prefix = type_as_prefix_steps(type_)
+            if instance := self._instances.find(tree_prefix):
                 return instance
 
             if not evaluate:
@@ -90,25 +91,31 @@ class Scope:
             self._stack.append(type_)
 
             try:
-                if factory := self._container._get_factory(type_):
-                    instance = self._instantiate_from_factory(factory)
-                    self._instances.add(instance)
-                else:
+                if not (factory := self._container._get_factory(type_)):
                     raise NoFactoryForTypeError(tuple(self._stack), type_)
+
+                if is_typealias(type_):
+                    typevars = _get_typevar_mapping(type_)  # type: ignore
+                else:
+                    typevars = {}
+
+                instance = self._instantiate_from_factory(factory, typevars)
+                self._instances.insert(tree_prefix, instance)
+                return instance
             finally:
                 popped = self._stack.pop()
                 if popped is not type_:
                     raise IncorrectStackPopping(
                         f"{self} incorrect scope stack popping for {self}, expected `{type_.__name__}`, popped `{popped.__name__}`"
                     )
-            return instance
 
-    def _instantiate_from_factory(self, factory: Factory) -> Any:
+    def _instantiate_from_factory(self, factory: Factory, typevars: dict[TypeVar, Any]) -> Any:
         positional_arguments = []
         keyword_arguments = {}
 
         for name, parameter in factory.parameters.items():
-            value = self.get_instance(parameter.annotation)
+            annotation = typevars.get(parameter.annotation, parameter.annotation)
+            value = self.get_instance(annotation)
 
             match parameter.kind:
                 case ParameterKind.POSITIONAL:

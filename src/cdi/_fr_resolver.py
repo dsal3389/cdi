@@ -45,10 +45,7 @@ class ForwardRefResolveByModuleStrategy:
 
 
 class ForwardRefResolver:
-    def __init__(
-        self,
-        strategy: ForwardRefResolveStrategy
-    ) -> None:
+    def __init__(self, strategy: ForwardRefResolveStrategy) -> None:
         self._strategy = strategy
 
     def resolve(self, forward_ref: ForwardRef | str) -> Any:

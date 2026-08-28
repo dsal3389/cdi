@@ -20,14 +20,14 @@ ctr = cdi.Container()
 
 # register this function as a factory
 # for the `int` type
-@cdi.Injectable(ctr=ctr)
+@cdi.Injectable(ctr)
 def get_int() -> int:
   return 100
 
 
 # register `Foo` as injectable
 # so we can create instances
-@cdi.Injectable(ctr=ctr)
+@cdi.Injectable(ctr)
 class Foo:
   def __init__(self, number: int) -> None:
       self.number = number
@@ -40,7 +40,7 @@ instance = scope.get_instance(Foo)
 assert instance.number == 100
 ```
 
-## Support Generics
+## Support Generics/TypeAliase
 
 ```py
 import cdi 
@@ -68,15 +68,31 @@ def name_generator() -> str:
     return "foo"
     
 
-scope = cdi.Scope(ctr)
+scope = cdi.Scope(__name__, container=ctr)
 instance = scope.get_instance(MyType)
 assert instance.field == "foo"
 ```
 
+```py
+ctr = cdi.Container()
+
+class Foo(Generic[T]):
+    def __init__(self, v: T):
+        self.v = v
+
+cdi.Injectable(ctr).register("hello world")
+cdi.Injectable(ctr).register(100)
+
+scope = Scope(__name__, container=ctr)
+assert scope.get_instance(Foo[int]).v == 100
+assert scope.get_instance(Foo[str]).v == "hello world"
+
+# even nested
+assert scope.get_instance(Foo[Foo[int]]).v.v == 100
+```
+
 ### what is not supported with generics (at least yet)
-* TypeAliases as parameters are not supported (i.e `list[int]`)
-* TypeAliases as injectable return type
-* TypeVars as parameters
+* TypeVars as parameters that are not used in return type
 * Typevars as injectable return type
 
 
@@ -120,13 +136,13 @@ the `update_forward_ref` has to be called after there is a class that can evalua
 ```py
 import sys
 
-@cdi.Injectable(ctr=ctr)
+@cdi.Injectable(ctr)
 class Foo:
     # references `Boo` which is not defined yet
     def __init__(self, boo: 'Boo') -> None: ...
 
 
-@cdi.Injectable(ctr=ctr)
+@cdi.Injectable(ctr)
 class Boo: ...
 
 
@@ -135,7 +151,7 @@ class Boo: ...
 ctr.update_forward_ref(sys.modules[__name__])
 
 # works fine
-instance = Scope(__name__, ctr=ctr).get_instance(Foo)
+instance = Scope(__name__, container=ctr).get_instance(Foo)
 ```
 
 ## Injectable
@@ -144,7 +160,7 @@ them with the given container
 
 ```py
 ctr = cdi.Container()
-injector = cdi.Injectable(ctr=ctr)
+injector = cdi.Injectable(ctr)
 
 injector.register(Foo)
 injector.register(my_func)
@@ -155,10 +171,10 @@ it can also be used as a decorator
 ```py
 ctr = cdi.Container()
 
-@cdi.Injectable(ctr=ctr)
+@cdi.Injectable(ctr)
 class Foo: ...
 
-@cdi.Injectable(ctr=ctr)
+@cdi.Injectable(ctr)
 def my_func() -> int: ...
 ```
 
@@ -180,7 +196,7 @@ for example
 ctr = cdi.Container()
 cdi.Injectable().register("hello world")
 
-scope = cdi.Scope(__name__, ctr=ctr)
+scope = cdi.Scope(__name__, container=ctr)
 assert scope.get_instance(str) == "hello world"
 ```
 
@@ -192,16 +208,16 @@ the factory to create a live instance that will be injected
 ctr = cdi.Container()
 
 # we inject the `Foo` class into the `ctr` container
-@cdi.Injectable(ctr=ctr)
+@cdi.Injectable(ctr)
 class Foo:
     def __init__(self, number: int) -> None:
         self.number = number
 
-cdi.Injectable(ctr=ctr).register(100)
+cdi.Injectable(ctr).register(100)
 
 # we define an instance scope that has access to the injectable
 # registered in `ctr`
-scope = cdi.Scope(__name__, ctr)
+scope = cdi.Scope(__name__, container=ctr)
 instance = scope.get_instance(Foo)
 instance2 = scope.get_instance(Foo)
 
@@ -210,7 +226,7 @@ instance2 = scope.get_instance(Foo)
 assert instance is instance2
 assert instance.number == 100
 
-scope2 = Scope(__name__ + '2', ctr)
+scope2 = Scope(__name__ + '2', container=ctr)
 scope2_instance = scope.get_instance(Foo)
 
 # a different scopes don't have access to each other instances 
@@ -240,14 +256,14 @@ the returned scope will be used for the type instanciation
 ctr = cdi.Container()
 ctr2 = cdi.Container()
 
-cdi.Injctable(ctr=ctr).register("hello world")
-cdi.Injctable(ctr=ctr2).register("what?")
+cdi.Injctable(ctr).register("hello world")
+cdi.Injctable(ctr2).register("what?")
 
-scope = Scope(__name__, ctr=ctr)
+scope = Scope(__name__, container=ctr)
 scope2 = scope.fork()
 
 
-@cdi.Injectable(ctr=ctr2)
+@cdi.Injectable(ctr2)
 class Foo:
     def __init__(
         self,
