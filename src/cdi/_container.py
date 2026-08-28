@@ -11,7 +11,6 @@ from ._factory import Factory, FactoryParameter, FactoryParameters, FactoryBuild
 from ._tree import PrefixTree, PrefixTreeTypeFindStrategy, type_as_prefix_steps
 
 
-
 __all__ = ("Container",)
 
 
@@ -84,7 +83,9 @@ class Container:
     """
 
     def __init__(self) -> None:
-        self._factories: PrefixTree[type, Factory] = PrefixTree(find_strategy=PrefixTreeTypeFindStrategy())
+        self._factories: PrefixTree[type, Factory] = PrefixTree(
+            find_strategy=PrefixTreeTypeFindStrategy()
+        )
         self._partially_initialized: list[Factory] = []
         self._lock = threading.Lock()
 
@@ -97,8 +98,7 @@ class Container:
         with self._lock:
             if is_partial:
                 self._factories.insert(
-                    type_as_prefix_steps(factory.return_type),
-                    factory
+                    type_as_prefix_steps(factory.return_type), factory
                 )
             else:
                 self._partially_initialized.append(factory)
@@ -114,7 +114,7 @@ class Container:
             if factory.module is module:
                 self._factories.insert(
                     type_as_prefix_steps(factory.return_type),
-                    _evaluate_partial_factory(factory)
+                    _evaluate_partial_factory(factory),
                 )
             else:
                 partially_initialized.append(factory)

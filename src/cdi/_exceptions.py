@@ -18,9 +18,7 @@ def _stack_traceback_message(stack: Iterable[type]) -> str:
     traceback = []
     for i, stack_type in enumerate(stack, start=1):
         module = cast(ModuleType, inspect.getmodule(stack_type))
-        traceback.append(
-            ("  " * i) + f"-> {module.__name__} - {stack_type}"
-        )
+        traceback.append(("  " * i) + f"-> {module.__name__} - {stack_type}")
     return "\n".join(traceback)
 
 

@@ -23,7 +23,9 @@ class Scope:
         self._name = name
         self._parent = parent
         self._container = container
-        self._instances = PrefixTree(find_strategy=PrefixTreeTypeFindStrategy()) # Registry(type)
+        self._instances = PrefixTree(
+            find_strategy=PrefixTreeTypeFindStrategy()
+        )  # Registry(type)
 
         self._stack: list[type] = []
         self._lock = threading.RLock()
@@ -67,9 +69,7 @@ class Scope:
                 return scope._get_unwrapped_type(type_, evaluate=evaluate)
             except (NoFactoryForTypeError, TypeEvaluationError):
                 pass
-        raise TypeEvaluationError(
-            f"{self} failed to evaluate type `{type_}`"
-        )
+        raise TypeEvaluationError(f"{self} failed to evaluate type `{type_}`")
 
     def _get_unwrapped_type(self, type_: type, evaluate: bool) -> Any:
         if type_ is NoneType:

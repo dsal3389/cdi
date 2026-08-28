@@ -66,7 +66,9 @@ class PrefixTreeTypeFindStrategy(PrefixTreeFindStrategyBase[type, _V]):
 
     def find(self, prefix: Sequence[type], node: PrefixTreeNode[type, _V]) -> _V | None:
         for step in prefix:
-            if (child := node._children.get(step)) or (child := node._children.get(_TypeVar)):
+            if (child := node._children.get(step)) or (
+                child := node._children.get(_TypeVar)
+            ):
                 node = child
             else:
                 return None
@@ -77,7 +79,7 @@ class PrefixTreeNode(Generic[_T, _V]):
     def __init__(
         self,
         value: _V | None = None,
-        children: dict[_T, PrefixTreeNode[_T, _V]] | None = None
+        children: dict[_T, PrefixTreeNode[_T, _V]] | None = None,
     ) -> None:
         self._value = value
         self._children = children or {}
@@ -85,8 +87,7 @@ class PrefixTreeNode(Generic[_T, _V]):
 
 class PrefixTree(Generic[_T, _V]):
     def __init__(
-        self,
-        find_strategy: PrefixTreeFindStrategyBase[_T, _V] | None = None
+        self, find_strategy: PrefixTreeFindStrategyBase[_T, _V] | None = None
     ) -> None:
         self._root = PrefixTreeNode()
         self._find_strategy = find_strategy or PrefixTreeFindStrategy()

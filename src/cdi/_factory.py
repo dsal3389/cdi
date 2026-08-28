@@ -65,7 +65,10 @@ class MroParameters:
 
         for mro_cls in mro:
             if args := orig_bases.get(mro_cls):
-                typevar_to_value = {typevar: args[i] for i, typevar in enumerate(_get_type_vars(mro_cls.__orig_bases__))}
+                typevar_to_value = {
+                    typevar: args[i]
+                    for i, typevar in enumerate(_get_type_vars(mro_cls.__orig_bases__))
+                }
             else:
                 typevar_to_value = {}
 
@@ -82,10 +85,14 @@ class MroParameters:
             for orig_base in cast(
                 tuple[GenericAlias | type], getattr(mro_cls, "__orig_bases__", ())
             ):
-                if (origin := get_origin(orig_base)) is not None and origin is not Generic:
+                if (
+                    origin := get_origin(orig_base)
+                ) is not None and origin is not Generic:
                     # if we have origin that is not `Generic`, and we see that we pass to it typevars
                     # we try to resolve the typevars to the real value
-                    orig_bases[origin] = list(typevar_to_value.get(arg, arg) for arg in get_args(orig_base))
+                    orig_bases[origin] = list(
+                        typevar_to_value.get(arg, arg) for arg in get_args(orig_base)
+                    )
 
             # we look for the method in the current class, if it is not defined, we move
             # to the next mro class, we do not want to use `getatter` here because it will

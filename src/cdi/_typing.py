@@ -4,18 +4,23 @@ import itertools
 from collections.abc import Sequence, Iterable, Callable
 
 from types import GenericAlias, UnionType
-from typing import TYPE_CHECKING, TypeVar, Generic, ForwardRef, Any, get_origin, get_args, cast, Annotated, Union
+from typing import (
+    TYPE_CHECKING,
+    TypeVar,
+    Generic,
+    ForwardRef,
+    Any,
+    Annotated,
+    Union,
+    get_origin,
+    get_args,
+)
 
 if TYPE_CHECKING:
     from ._scope import Scope
 
 
-__all__ = (
-    "is_typevar",
-    "is_forward_ref",
-    "evaluate_forward_ref",
-    "InjectableMetadata"
-)
+__all__ = ("is_typevar", "is_forward_ref", "evaluate_forward_ref", "InjectableMetadata")
 
 
 def _get_type_vars(orig_bases: Sequence[type | GenericAlias]) -> tuple[TypeVar, ...]:
@@ -40,7 +45,9 @@ def _unwrap_union(type_: Any) -> Iterable[Any]:
     yield type_
 
 
-def _get_annotated_injectable_metadata(annotated: Annotated[Any, ...]) -> tuple[type, InjectableMetadata | None]:
+def _get_annotated_injectable_metadata(
+    annotated: Annotated[Any, ...],
+) -> tuple[type, InjectableMetadata | None]:
     type_, *args = get_args(annotated)
     for arg in args:
         if isinstance(arg, InjectableMetadata):
