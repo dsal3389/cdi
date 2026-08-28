@@ -70,7 +70,7 @@ class MroParameters:
             if args := orig_bases.get(mro_cls):
                 typevar_to_value = {
                     typevar: args[i]
-                    for i, typevar in enumerate(_get_typevars(mro_cls.__orig_bases__))
+                    for i, typevar in enumerate(_get_typevars(mro_cls.__orig_bases__))  # type: ignore
                 }
             else:
                 typevar_to_value = {}

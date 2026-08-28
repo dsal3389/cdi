@@ -25,7 +25,7 @@ class Scope:
         self._container = container
         self._instances = PrefixTree(
             find_strategy=PrefixTreeTypeFindStrategy()
-        )  # Registry(type)
+        )
 
         self._stack: list[type] = []
         self._lock = threading.RLock()
