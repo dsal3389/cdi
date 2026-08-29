@@ -3,6 +3,8 @@ name = "cdi-di"
 version = "0.0.1-b5"
 description = "Python dependency injection made easy"
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
     { name = "daniel sonbolian", email = "dsal3389@gmail.com" }
 ]
