@@ -1,6 +1,6 @@
 import cdi
 import pytest
-from typing import Generic, TypeVar
+from typing import Generic, TypeVar, Annotated
 
 
 T = TypeVar("T")
@@ -67,3 +67,13 @@ def test_scope_typealiases(ctr: cdi.Container, scope: cdi.Scope):
 
     with pytest.raises(cdi.TypeEvaluationError):
         assert scope.get_instance(FooChildGeneric[float])
+
+
+def test_scope_inheritance(scope: cdi.Scope):
+    fork = scope.fork()
+
+    parent_instance = fork.get_instance(Annotated[Foo, cdi.InjectableMetadata(provider_scope=lambda scope: scope.parent)])
+    fork_instance = fork.get_instance(Foo)
+
+    assert parent_instance is not fork_instance
+    assert parent_instance is scope.get_instance(Foo)
