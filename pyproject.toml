@@ -1,6 +1,6 @@
 [project]
 name = "cdi-di"
-version = "0.0.1-b4"
+version = "0.0.1-b5"
 description = "Python dependency injection made easy"
 readme = "README.md"
 authors = [
