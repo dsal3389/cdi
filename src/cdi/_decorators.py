@@ -20,20 +20,19 @@ T = TypeVar("T")
 class Injectable:
     """
     responsible for creating factories from given types to inject
-    into the given container, mostly used as decorator, on a class or a function
+    into the bounded container
 
-    the factory parameters will be generated based on the function parameters, or if used
-    on class, it will be based on the `__init__` parameters
-
+    the class can be used as standalone or as a decorator
     ```py
     ctr = cdi.Container()
-    Inject = cdi.Injectable(ctr=ctr)
 
-    @Inject
+    @cdi.Injectable(ctr)
     class Foo:
-        def __init__(self, name: str) -> None:
-            pass
+        def __init__(self, name: str) -> None: ...
     ```
+
+    to read more about how the Injectable behaves for different data types
+    look at `cdi.Injectable.register`
     """
 
     def __init__(self, __ctr: Container, /) -> None:
@@ -41,22 +40,62 @@ class Injectable:
 
     @property
     def container(self) -> Container:
+        """returns the container the injector is bounded to"""
         return self._ctr
 
     def register(self, injectable: T) -> None:
         """
-        registers the given injectable into the provided container, based on the given type
-        a correct factory will be registered in the container
+        registers the given type into the provided container, an internal factory
+        will be generated based on the given type
 
-        CONSTANTS:
-            when a constant value will be provided, a factory that provide
-            the constant will be created, evaluations for the constant type will evaluate to that factory
-            which will return the same given instance, acting as a "global variable" for a container
+        ### Constant values
+        when registering an instance (value) and not a class or a function, a wrapper factory
+        will be built for that instance, calling the factory will always yield the same instance
 
-        CLASSES:
-            when a class is provided, the factory signature will be fetched from the class `__init__`
-            and the factory implementation will call the class `__call__`, the factory return type
-            will assume the given class
+        in a way it is like creating a global instances for a container that any scope
+        will have access to
+
+        ```py
+        ctr = cdi.Container()
+
+        class Foo:
+            pass
+
+        instance = Foo()
+        cdi.Injectable(ctr).register(instance)
+
+        scope1 = cdi.Scope(__name__ + "1", container=ctr)
+        scope2 = cdi.Scope(__name__ + "2", container=ctr)
+
+        # both share the same `instance` of `Foo`
+        assert scope1.get_instance(Foo) is scope2.get_instance(Foo)
+        ```
+
+        ### Classes
+        when injecting a class, the parameters will be fetched from the class `__init__`
+        and on instanciation time, the correct type will be injected based on the type hint,
+        the factory implementation will call the class `__call__` method
+
+        inheritance is supported, including `*args, **kwargs` in your `__init__` class will cause
+        the injector to move up the parent classes with respect to the `MRO` and evaluate the parent
+        parameters too
+
+        ```py
+        ctr = cdi.Container()
+
+        class Parent:
+            def __init__(self, parent_field: int) -> None: ...
+
+        class Child(Parent):
+            def __init__(self, child_field: int, *args, **kwargs) -> None: ...
+
+        # register int so it will be injected to `parent_field` and `child_field`
+        cdi.Injectable(ctr).register(100)
+
+        # the instance is able to be created without error, `parent_field` and `child_field`
+        # are required fields, and they will be injected
+        cdi.Scope(__name__, container=ctr).get_instance(Child)
+        ```
 
         FUNCTIONS:
             parameters and return type are calculated based on the function signature

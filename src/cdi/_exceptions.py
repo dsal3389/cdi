@@ -1,8 +1,8 @@
 import inspect
 import itertools
-from collections.abc import Iterable
 from types import ModuleType
 from typing import cast
+from collections.abc import Iterable
 
 __all__ = (
     "CdiError",
@@ -66,6 +66,7 @@ class CircularDependencyError(CdiError):
     """
 
     def __init__(self, stack: tuple[type, ...], type_: type) -> None:
+        """@private"""
         message = (
             f"Circular dependency detected when trying to resolve `{stack[0].__name__}` by type `{type_.__name__}`, traceback:\n"
             + _stack_traceback_message(itertools.chain(stack, (type_,)))

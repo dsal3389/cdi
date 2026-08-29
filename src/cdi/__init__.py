@@ -1,3 +1,7 @@
+"""
+.. include:: ../../README.md
+"""
+
 from ._container import Container
 from ._exceptions import (
     CdiError,
