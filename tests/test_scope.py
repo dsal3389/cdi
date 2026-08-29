@@ -62,6 +62,7 @@ def test_scope_typealiases(ctr: cdi.Container, scope: cdi.Scope):
     assert scope.get_instance(FooChildGeneric[int]).y == 100
     assert scope.get_instance(FooChildGeneric[str]).x == "hello"
     assert scope.get_instance(FooChildGeneric[str]).y == "world"
+    assert scope.get_instance(FooChildGeneric[FooChildGeneric[int]]).x is scope.get_instance(FooChildGeneric[int])
     assert scope.get_instance(FooChildGeneric[Foo])
 
     with pytest.raises(cdi.TypeEvaluationError):
