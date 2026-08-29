@@ -103,22 +103,19 @@ readability or ease of use
 # Documentation
 
 ## Container
-container defines the scope of available types for injections, if you have
-a `Scope` that want `int`, it will try to get the `int` factory from his container
+container contains registered types, types are registered to a container via `cdi.Injectable`
 
-thus you can have multiple `Containers` containing different types and provide separation
-but most of the time you will be using a single global container
+if a type is not registered in the container, `cdi` will not attempt to create that type and raise an error instead, [explicit is bettern then implicit](#explicit-is-better-then-implicit)
+
+you can have multiple different container instances contaning different types, or they contain the same types but they have different providers
 
 ```py
 ctr = cdi.Container()
 ```
 
-### Inject factories
-Containers contain is almost like a register of `Factories`, a factory can
-be injected only through the `Injectable` class
 
-## Forward references
-some factories may have unresolved forward references in their return type or parameters, when evaluated
+### Forward references
+some types may have unresolved forward references in their return type or parameters, when evaluated
 it is impossible to know what type sits behind those forward ref strings
 
 ```py
@@ -128,10 +125,10 @@ class Foo:
 ```
 
 such factories will not be usable for injection, to resolve forward refs
-the container class provide `update_forward_ref` which takes the module you want to update the forward refs for, this takes insperation
+the container class provide `cid.Container.update_forward_ref` which takes the module you want to update the forward refs for, this takes insperation
 from `Pydantic/v1`
 
-the `update_forward_ref` has to be called after there is a class that can evaluate the forward ref
+the `update_forward_ref` has to be called after there is a class that can evaluate the forward ref name
 
 ```py
 import sys
@@ -155,8 +152,7 @@ instance = Scope(__name__, container=ctr).get_instance(Foo)
 ```
 
 ## Injectable
-injectable is a type that creates factories based on the given type and registers
-them with the given container
+`Injectable` is responsible to take your type and register it into a container, the injector will create an intenal `Factory` for the provided type and register it into the bounded container
 
 ```py
 ctr = cdi.Container()
@@ -201,8 +197,9 @@ assert scope.get_instance(str) == "hello world"
 ```
 
 ## Scopes
-scopes provide sepration of live instances, they use the containers to get the factory, and they call
-the factory to create a live instance that will be injected
+scope defines the lifetime or bounderies of an instance, the `Scope` only contains the instance, and it is bounded to a `cdi.Container`
+
+the `Scope` uses the bounded container to get factories and create instances for the types, all instances are singletones, meaning when a type is created once, it will not be created again, and the same instance will be injected
 
 ```py
 ctr = cdi.Container()
@@ -239,7 +236,7 @@ scopes can inherit parent and child like inheritance, the parent has no access t
 but the child does have access to the parent
 
 there is no unique behavior for the child/parent scope when they aquire the relevant roles, this is mostly
-for ease of use, the real inheritance comes into play via `InjectableMetadata`
+for ease of use, the real inheritance comes into play via `cdi.InjectableMetadata`
 
 ## annotation Metadata
 you can change some default behaviors of the injectable type but in a way that make
