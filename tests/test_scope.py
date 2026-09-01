@@ -105,3 +105,11 @@ def test_unique_types(ctr: cdi.Container, scope: cdi.Scope):
     instance = scope.get_instance(GetGenericType[str])
     assert instance.t is int
     assert instance.g is str
+
+
+def test_unsupported_edge_cases(scope: cdi.Scope):
+    with pytest.raises(cdi.TypeEvaluationError):
+        scope.get_instance(FooGeneric[T])
+
+    with pytest.raises(cdi.TypeEvaluationError):
+        scope.get_instance(FooGeneric)

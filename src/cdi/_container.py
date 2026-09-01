@@ -104,7 +104,9 @@ class Container:
             else:
                 self._partially_initialized.append(factory)
 
-    def update_forward_ref(self, module: ModuleType) -> None:
+    def update_forward_refs(self, module: ModuleType) -> None:
+        # TODO: should we call `insepct.currentframe` to have visibility
+        # for locals?
         with self._lock:
             self._update_forward_ref(module)
 

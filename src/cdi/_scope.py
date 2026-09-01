@@ -5,7 +5,7 @@ import threading
 from collections import deque
 from types import NoneType, GenericAlias
 from typing import Any, Annotated, TypeVar, get_origin, get_args, cast
-from typing_extensions import TypeAliasType
+from typing_extensions import TypeAliasType, overload
 
 from ._container import Container
 from ._factory import Factory, ParameterKind
@@ -27,14 +27,37 @@ from ._typing import (
 )
 
 
+_T = TypeVar("_T")
+
+
 class Scope:
+    """
+    hold the live instances, different scope do not share instances
+    between them unless explicitly annotated via `cdi.InjectableMetadata(provider_scope=...)`
+
+    live instances can be inserted into the scope more about it look at `Scope.insert_instance`,
+    the scope cannot manipulate the bounded container in any way
+
+    scopes can inherit from different scopes, aquiring those roles do not effect the scope
+    behavior, it is more for conviniance when using `cdi.InjectableMetadata(provider_scope=...)`
+
+    the scope name is mostly for easier debugging and clearer errors
+
+    ## thread safety
+    scope is threadsafe, for every instance an internal lock is aquired preventing
+    2 threads evaluating at the same time
+
+    if the evaluation requires the parent, and no evaluation operation is required on the child scope
+    then the child scope lock will not be acquired
+    """
+
     def __init__(
         self, __name: str, /, *, container: Container, parent: Scope | None = None
     ) -> None:
         self._name = __name
         self._parent = parent
         self._container = container
-        self._instances = PrefixTree(find_strategy=PrefixTreeTypeFindStrategy())
+        self._instances: PrefixTree[type, Any] = PrefixTree(find_strategy=PrefixTreeTypeFindStrategy())
 
         self._stack: list[type] = []
         self._lock = threading.RLock()
@@ -57,7 +80,10 @@ class Scope:
             name or (self.name + "-fork"), container=self._container, parent=self
         )
 
-    def get_instance(self, type_: Any) -> Any:
+    def get_instance(
+        self,
+        type_: type[_T] | Annotated[type[_T], ...]
+    ) -> _T:
         """
         returns an instance of the given type, assuming some factory
         is registered at the container level that can create the type
@@ -68,6 +94,17 @@ class Scope:
         """
         inserts the live instance into the scope, mapping between the instance
         type to the instance itself
+
+        ```py
+        my_obj = object()
+
+        scope = cdi.Scope(...)
+        scope.insert_instance(100)
+        scope.insert_instance(my_obj)
+
+        assert scope.get_instance(int) is 100
+        assert scope.get_instance(object) is my_obj
+        ```
         """
         prefix = type_as_prefix_steps(type(instance))
         with self._lock:
@@ -109,8 +146,8 @@ class Scope:
                 if origin is Annotated:
                     # we look for the relevant metadata and also update the real
                     # value of the annontated type
-                    type_, annotated_metadata = _get_annotated_injectable_metadata(type_)
-                    types_.appendleft((type_, annotated_metadata or metadata))
+                    inner, annotated_metadata = _get_annotated_injectable_metadata(type_)
+                    types_.appendleft((inner, annotated_metadata or metadata))
                     continue
 
             scope = self
@@ -132,10 +169,10 @@ class Scope:
                         # if the type was wrapped with `Annotated` we want to
                         # call `_get_instance` to instantiate the real type
                         return scope._get_instance(
-                            Annotated[type_, metadata_copy],
+                            Annotated[type_, metadata_copy],  # type: ignore
                             typevars=typevars
                         )
-                return scope._get_unwrapped_type(type_, typevars=typevars)
+                return scope._get_unwrapped_type(type_)
             except NoFactoryForTypeError as e:
                 exceptions.append(TypeEvaluationError(
                     f"{self} failed to evaluate type `{type_.__name__}` due to error: " + str(e) + "\n" + (custom_error_message or "")
@@ -144,7 +181,7 @@ class Scope:
         error_message = f"{self} failed to evaluate type {type_} due to errors:\n" + "\n - ".join(map(str, exceptions))
         raise TypeEvaluationError(error_message)
 
-    def _get_unwrapped_type(self, type_: type | GenericAlias | TypeAliasType, typevars: dict[TypeVar, Any]) -> Any:
+    def _get_unwrapped_type(self, type_: type | GenericAlias | TypeAliasType) -> Any:
         if type_ is NoneType:
             return None
 
@@ -153,8 +190,7 @@ class Scope:
             origin = get_origin(type_)
 
             if origin is type:
-                arg = get_args(type_)[0]
-                return typevars.get(arg, arg)
+                return get_args(type_)[0]
 
         with self._lock:
             tree_prefix = type_as_prefix_steps(type_)
@@ -164,6 +200,9 @@ class Scope:
             if type_ in self._stack:
                 raise CircularDependencyError(tuple(self._stack), type_)
 
+            # TODO: I am pretty sure there is a bug with generic aliases
+            # types since each generic alias is a different instance so in `in` operation will be falsy
+            # check in future
             self._stack.append(type_)
 
             try:
