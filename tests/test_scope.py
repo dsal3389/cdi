@@ -69,6 +69,22 @@ def test_scope_typealiases(ctr: cdi.Container, scope: cdi.Scope):
         assert scope.get_instance(FooChildGeneric[float])
 
 
+def test_scope_nested_typealiases(ctr: cdi.Container, scope: cdi.Scope):
+    @cdi.Injectable(ctr)
+    class LocalFoo(Generic[T]):
+        def __init__(self, a: FooGeneric[T]) -> None:
+            self.a = a
+
+    scope.insert_instance(100)
+    instance = scope.get_instance(LocalFoo[int])
+
+
+    assert isinstance(instance.a, FooGeneric)
+    assert instance.a.x == 100
+    assert instance.a.y == 100
+    assert scope.get_instance(FooGeneric[int]) is instance.a
+
+
 def test_scope_inheritance(scope: cdi.Scope):
     fork = scope.fork()
 
@@ -77,3 +93,15 @@ def test_scope_inheritance(scope: cdi.Scope):
 
     assert parent_instance is not fork_instance
     assert parent_instance is scope.get_instance(Foo)
+
+
+def test_unique_types(ctr: cdi.Container, scope: cdi.Scope):
+    @cdi.Injectable(ctr)
+    class GetGenericType(Generic[T]):
+        def __init__(self, t: type[int], g: type[T]) -> None:
+            self.t = t
+            self.g = g
+
+    instance = scope.get_instance(GetGenericType[str])
+    assert instance.t is int
+    assert instance.g is str
