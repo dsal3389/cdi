@@ -104,7 +104,6 @@ the library tries to make you explicit with your typing without compromising
 readability or ease of use
 
 ## Planned
-* some form of lazy loading for circular dependency
 * inject non singleton
 * contextmanager for scope, instances will be bounded to the `with` lifetime
 

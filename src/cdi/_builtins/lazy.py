@@ -43,11 +43,11 @@ class Lazy(Generic[_T]):
     assert instance.b.a.wake() is instance
     ```
 
-    ## activating Lazy
+    ### activating Lazy
     currently lazy is not activated by default, to use lazy in your injection
     you need to do 2 things
 
-    1. register `Lazy` factory in the container level
+    1. register `Lazy` at the container level
     ```py
     cdi.Injectable(ctr).register(cdi.Lazy)
     ```
@@ -67,6 +67,7 @@ class Lazy(Generic[_T]):
             )
         ]
     ) -> None:
+        """@private"""
         self._type = type_
         self._scope = scope
         self._instance: _T | None = None

@@ -78,7 +78,7 @@ class Container:
     a type, it fetches the registered factory for the required type and uses
     that factory to create the type
 
-    THREAD SAFETY:
+    ### THREAD SAFETY
         containers are thread safe, they can be used in multiple different places that use
         threading, for example, multiple scopes that run on different threads
     """
