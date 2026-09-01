@@ -1,6 +1,6 @@
 [project]
 name = "cdi-di"
-version = "0.0.1-b5"
+version = "0.0.1-b6"
 description = "Python dependency injection made easy"
 readme = "README.md"
 license = "MIT"
