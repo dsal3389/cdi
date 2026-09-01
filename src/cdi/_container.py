@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import threading
-from types import ModuleType
+from types import ModuleType, GenericAlias
 from typing import ForwardRef
+from typing_extensions import TypeAliasType
 
 from ._typing import is_forward_ref, is_typevar
 from ._exceptions import ResolveForwardRefError
@@ -120,7 +121,7 @@ class Container:
                 partially_initialized.append(factory)
         self._partially_initialized = partially_initialized
 
-    def _get_factory(self, type_: type) -> Factory | None:
+    def _get_factory(self, type_: type | GenericAlias | TypeAliasType) -> Factory | None:
         """
         returns the correct factory for the requested type
         """

@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import itertools
 from collections.abc import Sequence, Iterable, Callable
-from typing_extensions import TypeAliasType
 
 from types import GenericAlias, UnionType
 from typing import (
@@ -16,12 +15,22 @@ from typing import (
     get_origin,
     get_args,
 )
+from typing_extensions import TypeAliasType
 
 if TYPE_CHECKING:
     from ._scope import Scope
 
 
-__all__ = ("is_typevar", "is_typealias", "is_forward_ref", "InjectableMetadata")
+__all__ = ("is_typevar", "is_generic_alias", "is_forward_ref", "InjectableMetadata")
+
+
+def _resolve_type_generics(type_: GenericAlias, typevars: dict[TypeVar, Any]) -> GenericAlias:
+    origin = get_origin(type_)
+    resolved_args = []
+
+    for arg in get_args(type_):
+        resolved_args.append(typevars.get(arg, arg))
+    return GenericAlias(origin, tuple(resolved_args))
 
 
 def _get_typevars(orig_bases: Sequence[type | GenericAlias]) -> tuple[TypeVar, ...]:
@@ -31,12 +40,12 @@ def _get_typevars(orig_bases: Sequence[type | GenericAlias]) -> tuple[TypeVar, .
     return ()
 
 
-def _get_typevar_mapping(typealias: TypeAliasType) -> dict[TypeVar, Any]:
+def _get_typevar_mapping(typealias: GenericAlias) -> dict[TypeVar, Any]:
     origin = get_origin(typealias)
     mapping = {}
 
     for typevar, value in zip(
-        _get_typevars(origin.__orig_bases__), get_args(typealias)
+        _get_typevars(origin.__orig_bases__), get_args(typealias)  # type: ignore
     ):
         mapping[typevar] = value
     return mapping
@@ -49,12 +58,12 @@ def _as_forward_ref(v: ForwardRef | str) -> ForwardRef:
 
 
 def _unwrap_union(type_: Any) -> Iterable[Any]:
-    if origin := get_origin(type_):
-        if origin in (UnionType, Union):
-            yield from itertools.chain.from_iterable(
-                map(_unwrap_union, get_args(type_))
-            )
-    yield type_
+    if is_union(type_):
+        yield from itertools.chain.from_iterable(
+            map(_unwrap_union, get_args(type_))
+        )
+    else:
+        yield type_
 
 
 def _get_annotated_injectable_metadata(
@@ -67,6 +76,10 @@ def _get_annotated_injectable_metadata(
     return (type, None)
 
 
+def is_union(value: Any) -> bool:
+    return get_origin(value) in (UnionType, Union)
+
+
 def is_forward_ref(value: Any) -> bool:
     return isinstance(value, (str, ForwardRef))
 
@@ -75,7 +88,7 @@ def is_typevar(value: Any) -> bool:
     return isinstance(value, TypeVar)
 
 
-def is_typealias(value: Any) -> bool:
+def is_generic_alias(value: Any) -> bool:
     return get_origin(value) is not None
 
 
@@ -84,6 +97,8 @@ class InjectableMetadata:
         self,
         provider_scope: Callable[[Scope], Scope] | None = None,
         evaluate: bool = True,
+        error_message: str | None = None
     ) -> None:
         self._provider_scope = provider_scope
         self._evaluate = evaluate
+        self._error_message = error_message

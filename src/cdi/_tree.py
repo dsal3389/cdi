@@ -1,5 +1,7 @@
 from __future__ import annotations
+from types import GenericAlias
 from typing import Generic, TypeVar, get_origin, get_args
+from typing_extensions import TypeAliasType
 from collections.abc import Sequence
 
 from ._typing import is_typevar, _get_typevars
@@ -26,7 +28,7 @@ def _standarize_args(args: Sequence[type | TypeVar]) -> tuple[type, ...]:
     return tuple(standarized)  # type: ignore
 
 
-def type_as_prefix_steps(type_: type) -> Sequence[type]:
+def type_as_prefix_steps(type_: type | GenericAlias | TypeAliasType) -> Sequence[type]:
     """
     convert the given type to step of types that can be inserted into `PrefixTree`, the
     steps are generated like so for each possible type
@@ -38,9 +40,9 @@ def type_as_prefix_steps(type_: type) -> Sequence[type]:
     if origin := get_origin(type_):
         return (origin, *_standarize_args(get_args(type_)))
     elif typevars := _get_typevars(getattr(type_, "__orig_bases__", ())):
-        return (type_, *_standarize_args(typevars))
+        return (type_, *_standarize_args(typevars))  # type: ignore
     else:
-        return (type_,)
+        return (type_,)  # type: ignore
 
 
 class PrefixTreeFindStrategyBase(Generic[_T, _V]):

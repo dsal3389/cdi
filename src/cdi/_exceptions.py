@@ -1,7 +1,7 @@
 import inspect
 import itertools
 from types import ModuleType
-from typing import cast
+from typing import Any, cast
 from collections.abc import Iterable
 
 __all__ = (
@@ -50,7 +50,7 @@ class TypeEvaluationError(CdiError):
 class NoFactoryForTypeError(CdiError):
     """raise when no factory found for the required type in the container"""
 
-    def __init__(self, stack: tuple[type, ...], type_: type) -> None:
+    def __init__(self, stack: tuple[type, ...], type_: Any) -> None:
         message = (
             f"No factory was provided for required type `{type_}`, backtrace:\n"
             + _stack_traceback_message(stack)
@@ -65,7 +65,7 @@ class CircularDependencyError(CdiError):
     stacktrace is also printed
     """
 
-    def __init__(self, stack: tuple[type, ...], type_: type) -> None:
+    def __init__(self, stack: tuple[type, ...], type_: Any) -> None:
         """@private"""
         message = (
             f"Circular dependency detected when trying to resolve `{stack[0].__name__}` by type `{type_.__name__}`, traceback:\n"

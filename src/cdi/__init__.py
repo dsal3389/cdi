@@ -2,6 +2,7 @@
 .. include:: ../../README.md
 """
 
+from ._typing import InjectableMetadata
 from ._container import Container
 from ._exceptions import (
     CdiError,
@@ -10,8 +11,8 @@ from ._exceptions import (
     TypeEvaluationError,
 )
 from ._scope import Scope
+from ._builtins import Lazy
 from ._decorators import Injectable
-from ._typing import InjectableMetadata
 
 
 __all__ = (
@@ -19,6 +20,7 @@ __all__ = (
     "Container",
     "Injectable",
     "InjectableMetadata",
+    "Lazy",
     "CdiError",
     "TypeEvaluationError",
     "IncorrectStackPopping",
