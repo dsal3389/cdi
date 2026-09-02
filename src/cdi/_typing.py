@@ -26,7 +26,9 @@ __all__ = ("is_typevar", "is_generic_alias", "is_forward_ref", "InjectableMetada
 _miss = object()
 
 
-def _resolve_type_generics(type_: GenericAlias, typevars: dict[TypeVar, Any]) -> GenericAlias:
+def _resolve_type_generics(
+    type_: GenericAlias, typevars: dict[TypeVar, Any]
+) -> GenericAlias:
     origin = get_origin(type_)
     resolved_args = []
 
@@ -47,7 +49,8 @@ def _get_typevar_mapping(typealias: GenericAlias) -> dict[TypeVar, Any]:
 
     if origin := get_origin(typealias):
         for typevar, value in zip(
-            _get_typevars(origin.__orig_bases__), get_args(typealias)  # type: ignore
+            _get_typevars(origin.__orig_bases__),
+            get_args(typealias),  # type: ignore
         ):
             mapping[typevar] = value
     return mapping
@@ -61,9 +64,7 @@ def _as_forward_ref(v: ForwardRef | str) -> ForwardRef:
 
 def _unwrap_union(type_: Any) -> Iterable[Any]:
     if is_union(type_):
-        yield from itertools.chain.from_iterable(
-            map(_unwrap_union, get_args(type_))
-        )
+        yield from itertools.chain.from_iterable(map(_unwrap_union, get_args(type_)))
     else:
         yield type_
 
@@ -100,7 +101,7 @@ class InjectableMetadata:
         *,
         transient: bool = False,
         provider_scope: Callable[[Scope], Scope] | None = None,
-        error_message: str | None = None
+        error_message: str | None = None,
     ) -> None:
         self._transient = transient
         self._provider_scope = provider_scope

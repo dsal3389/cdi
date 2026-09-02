@@ -58,10 +58,13 @@ class Scope:
         self._name = __name
         self._parent = parent
         self._container = container
-        self._instances: PrefixTree[type, Any] = PrefixTree(find_strategy=PrefixTreeTypeFindStrategy())
+        self._instances: PrefixTree[type, Any] = PrefixTree(
+            find_strategy=PrefixTreeTypeFindStrategy()
+        )
 
         self._stack: list[type] = []
         self._lock = threading.RLock()
+        self._setup()
 
     @property
     def name(self) -> str:
@@ -97,10 +100,7 @@ class Scope:
         with self._lock:
             return self._instances.find(prefix) is not None
 
-    def get_instance(
-        self,
-        type_: TypeForm[_T]
-    ) -> _T:
+    def get_instance(self, type_: TypeForm[_T]) -> _T:
         """
         returns an instance of the given type, assuming some factory
         is registered at the container level that can create the type
@@ -163,13 +163,19 @@ class Scope:
                 if origin is Annotated:
                     # we look for the relevant metadata and also update the real
                     # value of the annontated type
-                    inner, annotated_metadata = _get_annotated_injectable_metadata(type_)
-                    types_.appendleft((
-                        inner,
-                        # try to merge previous metadata with the annotated metadata
-                        # but we give more priority to the annotation truthy values
-                        annotated_metadata.merge(metadata) if annotated_metadata else metadata
-                    ))
+                    inner, annotated_metadata = _get_annotated_injectable_metadata(
+                        type_
+                    )
+                    types_.appendleft(
+                        (
+                            inner,
+                            # try to merge previous metadata with the annotated metadata
+                            # but we give more priority to the annotation truthy values
+                            annotated_metadata.merge(metadata)
+                            if annotated_metadata
+                            else metadata,
+                        )
+                    )
                     continue
 
             scope = self
@@ -192,7 +198,7 @@ class Scope:
                         # call `_get_instance` to instantiate the real type
                         return scope._get_instance_impl(
                             Annotated[type_, metadata_copy],  # type: ignore
-                            typevars=typevars
+                            typevars=typevars,
                         )
 
                 dry_instance = self._get_dry_type(type_)
@@ -203,11 +209,19 @@ class Scope:
                 else:
                     return scope._get_unwrapped_type(type_)
             except NoFactoryForTypeError as e:
-                exceptions.append(TypeEvaluationError(
-                    f"{self} failed to evaluate type `{type_.__name__}` due to error: " + str(e) + "\n" + (custom_error_message or "")
-                ))
+                exceptions.append(
+                    TypeEvaluationError(
+                        f"{self} failed to evaluate type `{type_.__name__}` due to error: "
+                        + str(e)
+                        + "\n"
+                        + (custom_error_message or "")
+                    )
+                )
 
-        error_message = f"{self} failed to evaluate type {type_} due to errors:\n" + "\n - ".join(map(str, exceptions))
+        error_message = (
+            f"{self} failed to evaluate type {type_} due to errors:\n"
+            + "\n - ".join(map(str, exceptions))
+        )
         raise TypeEvaluationError(error_message)
 
     def _get_unwrapped_type(self, type_: Any) -> Any:
@@ -257,10 +271,7 @@ class Scope:
 
     def _create_instance(self, type_: Any) -> Any:
         if factory := self._container._get_factory(type_):
-            return self._instantiate_from_factory(
-                factory,
-                _get_typevar_mapping(type_)
-            )
+            return self._instantiate_from_factory(factory, _get_typevar_mapping(type_))
         raise NoFactoryForTypeError(tuple(self._stack), type_)
 
     def _instantiate_from_factory(
@@ -279,6 +290,9 @@ class Scope:
                 case ParameterKind.KEYWORD:
                     keyword_arguments[name] = value
         return factory(*positional_arguments, **keyword_arguments)
+
+    def _setup(self) -> None:
+        self.insert_instance(self)
 
     def __str__(self) -> str:
         return f"Scope<{self.name}>"

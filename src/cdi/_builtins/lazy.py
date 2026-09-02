@@ -42,19 +42,6 @@ class Lazy(Generic[_T]):
     instance = scope.get_instance(A)  # ok
     assert instance.b.a.wake() is instance
     ```
-
-    ### activating Lazy
-    currently lazy is not activated by default, to use lazy in your injection
-    you need to do 2 things
-
-    1. register `Lazy` at the container level
-    ```py
-    cdi.Injectable(ctr).register(cdi.Lazy)
-    ```
-    2. insert the scope instance as injectable
-    ```py
-    scope.insert_instance(scope)
-    ```
     """
 
     def __init__(
@@ -64,8 +51,8 @@ class Lazy(Generic[_T]):
             cdi.Scope,
             cdi.InjectableMetadata(
                 error_message="to use `Lazy` it is required to insert the `Scope` instance"
-            )
-        ]
+            ),
+        ],
     ) -> None:
         """@private"""
         self._type = type_

@@ -16,8 +16,8 @@ from ._decorators import Injectable
 
 
 __all__ = (
-    "Scope",
     "Container",
+    "Scope",
     "Injectable",
     "InjectableMetadata",
     "Lazy",

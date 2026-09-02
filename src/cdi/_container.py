@@ -6,6 +6,7 @@ from typing import ForwardRef
 from typing_extensions import TypeAliasType
 
 from ._typing import is_forward_ref, is_typevar
+from ._decorators import Injectable
 from ._exceptions import ResolveForwardRefError
 from ._fr_resolver import ForwardRefResolver, ForwardRefResolveByModuleStrategy
 from ._factory import Factory, FactoryParameter, FactoryParameters, FactoryBuilder
@@ -89,6 +90,7 @@ class Container:
         )
         self._partially_initialized: list[Factory] = []
         self._lock = threading.Lock()
+        self._setup()
 
     def _register(self, factory: Factory) -> None:
         """
@@ -123,10 +125,17 @@ class Container:
                 partially_initialized.append(factory)
         self._partially_initialized = partially_initialized
 
-    def _get_factory(self, type_: type | GenericAlias | TypeAliasType) -> Factory | None:
+    def _get_factory(
+        self, type_: type | GenericAlias | TypeAliasType
+    ) -> Factory | None:
         """
         returns the correct factory for the requested type
         """
         prefix = type_as_prefix_steps(type_)
         with self._lock:
             return self._factories.find(prefix)
+
+    def _setup(self) -> None:
+        from ._builtins import Lazy
+
+        Injectable(self).register(Lazy)

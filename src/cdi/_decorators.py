@@ -1,14 +1,17 @@
-from collections.abc import Callable
+from __future__ import annotations
 
 import inspect
 from types import ModuleType
-from typing import TypeVar, Any, cast
+from typing import TYPE_CHECKING, TypeVar, Any, cast
+from collections.abc import Callable
 
-from ._container import Container
 from ._fr_resolver import ForwardRefResolver, ForwardRefResolveByModuleStrategy
 from ._exceptions import ResolveForwardRefError
 from ._factory import MroParameters, FuncParameters, FactoryBuilder
 from ._typing import is_forward_ref
+
+if TYPE_CHECKING:
+    from ._container import Container
 
 
 __all__ = ("Injectable",)

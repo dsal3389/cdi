@@ -2,9 +2,7 @@ from typing import TypeVar, Annotated
 from cdi._typing import InjectableMetadata
 
 
-__all__ = (
-    "Transient",
-)
+__all__ = ("Transient",)
 
 _T = TypeVar("_T")
 

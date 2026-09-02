@@ -62,7 +62,9 @@ def test_scope_typealiases(ctr: cdi.Container, scope: cdi.Scope):
     assert scope.get_instance(FooChildGeneric[int]).y == 100
     assert scope.get_instance(FooChildGeneric[str]).x == "hello"
     assert scope.get_instance(FooChildGeneric[str]).y == "world"
-    assert scope.get_instance(FooChildGeneric[FooChildGeneric[int]]).x is scope.get_instance(FooChildGeneric[int])
+    assert scope.get_instance(
+        FooChildGeneric[FooChildGeneric[int]]
+    ).x is scope.get_instance(FooChildGeneric[int])
     assert scope.get_instance(FooChildGeneric[Foo])
 
     with pytest.raises(cdi.TypeEvaluationError):
@@ -78,7 +80,6 @@ def test_scope_nested_typealiases(ctr: cdi.Container, scope: cdi.Scope):
     scope.insert_instance(100)
     instance = scope.get_instance(LocalFoo[int])
 
-
     assert isinstance(instance.a, FooGeneric)
     assert instance.a.x == 100
     assert instance.a.y == 100
@@ -88,7 +89,11 @@ def test_scope_nested_typealiases(ctr: cdi.Container, scope: cdi.Scope):
 def test_scope_inheritance(scope: cdi.Scope):
     fork = scope.fork()
 
-    parent_instance = fork.get_instance(Annotated[Foo, cdi.InjectableMetadata(provider_scope=lambda scope: scope.parent)])
+    parent_instance = fork.get_instance(
+        Annotated[
+            Foo, cdi.InjectableMetadata(provider_scope=lambda scope: scope.parent)
+        ]
+    )
     fork_instance = fork.get_instance(Foo)
 
     assert parent_instance is not fork_instance
