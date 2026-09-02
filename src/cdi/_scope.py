@@ -5,7 +5,7 @@ import threading
 from collections import deque
 from types import NoneType, GenericAlias
 from typing import Any, Annotated, TypeVar, get_origin, get_args, cast
-from typing_extensions import TypeAliasType, overload
+from typing_extensions import TypeForm
 
 from ._container import Container
 from ._factory import Factory, ParameterKind
@@ -17,6 +17,7 @@ from ._exceptions import (
 )
 from ._tree import PrefixTree, PrefixTreeTypeFindStrategy, type_as_prefix_steps
 from ._typing import (
+    _miss,
     _unwrap_union,
     _get_annotated_injectable_metadata,
     _resolve_type_generics,
@@ -67,6 +68,10 @@ class Scope:
         return self._name
 
     @property
+    def container(self) -> Container:
+        return self._container
+
+    @property
     def parent(self) -> Scope | None:
         """returns the parent of the scope if any"""
         return self._parent
@@ -80,15 +85,27 @@ class Scope:
             name or (self.name + "-fork"), container=self._container, parent=self
         )
 
+    def has_instance(self, type_: Any) -> bool:
+        """
+        returns a boolean value indicating if the scope has a live
+        instance of the given type
+
+        it doesn't check if the scope can create such type, for possibility
+        of type creation refer to the scope `cdi.Container` from `scope.container`
+        """
+        prefix = type_as_prefix_steps(type_)
+        with self._lock:
+            return self._instances.find(prefix) is not None
+
     def get_instance(
         self,
-        type_: type[_T] | Annotated[type[_T], ...]
+        type_: TypeForm[_T]
     ) -> _T:
         """
         returns an instance of the given type, assuming some factory
         is registered at the container level that can create the type
         """
-        return self._get_instance(type_, typevars={})
+        return self._get_instance_impl(type_, typevars={})
 
     def insert_instance(self, instance: Any) -> None:
         """
@@ -110,7 +127,7 @@ class Scope:
         with self._lock:
             self._instances.insert(prefix, instance)
 
-    def _get_instance(
+    def _get_instance_impl(
         self,
         type_: Any,
         typevars: dict[TypeVar, Any],
@@ -147,7 +164,12 @@ class Scope:
                     # we look for the relevant metadata and also update the real
                     # value of the annontated type
                     inner, annotated_metadata = _get_annotated_injectable_metadata(type_)
-                    types_.appendleft((inner, annotated_metadata or metadata))
+                    types_.appendleft((
+                        inner,
+                        # try to merge previous metadata with the annotated metadata
+                        # but we give more priority to the annotation truthy values
+                        annotated_metadata.merge(metadata) if annotated_metadata else metadata
+                    ))
                     continue
 
             scope = self
@@ -168,11 +190,18 @@ class Scope:
 
                         # if the type was wrapped with `Annotated` we want to
                         # call `_get_instance` to instantiate the real type
-                        return scope._get_instance(
+                        return scope._get_instance_impl(
                             Annotated[type_, metadata_copy],  # type: ignore
                             typevars=typevars
                         )
-                return scope._get_unwrapped_type(type_)
+
+                dry_instance = self._get_dry_type(type_)
+                if dry_instance is not _miss:
+                    return dry_instance
+                elif metadata._transient:
+                    return scope._create_instance(type_)
+                else:
+                    return scope._get_unwrapped_type(type_)
             except NoFactoryForTypeError as e:
                 exceptions.append(TypeEvaluationError(
                     f"{self} failed to evaluate type `{type_.__name__}` due to error: " + str(e) + "\n" + (custom_error_message or "")
@@ -181,17 +210,7 @@ class Scope:
         error_message = f"{self} failed to evaluate type {type_} due to errors:\n" + "\n - ".join(map(str, exceptions))
         raise TypeEvaluationError(error_message)
 
-    def _get_unwrapped_type(self, type_: type | GenericAlias | TypeAliasType) -> Any:
-        if type_ is NoneType:
-            return None
-
-        if is_generic_alias(type_):
-            type_ = cast(GenericAlias, type_)
-            origin = get_origin(type_)
-
-            if origin is type:
-                return get_args(type_)[0]
-
+    def _get_unwrapped_type(self, type_: Any) -> Any:
         with self._lock:
             tree_prefix = type_as_prefix_steps(type_)
             if instance := self._instances.find(tree_prefix):
@@ -206,15 +225,7 @@ class Scope:
             self._stack.append(type_)
 
             try:
-                if not (factory := self._container._get_factory(type_)):
-                    raise NoFactoryForTypeError(tuple(self._stack), type_)
-
-                if is_generic_alias(type_):
-                    typevars = _get_typevar_mapping(type_)  # type: ignore
-                else:
-                    typevars = {}
-
-                instance = self._instantiate_from_factory(factory, typevars)
+                instance = self._create_instance(type_)
                 self._instances.insert(tree_prefix, instance)
                 return instance
             finally:
@@ -224,6 +235,34 @@ class Scope:
                         f"{self} incorrect scope stack popping for {self}, expected `{type_.__name__}`, popped `{popped.__name__}`"
                     )
 
+    def _get_dry_type(self, type_: Any) -> Any:
+        """
+        the term "dry" here means that the type doesn't require touching
+        the `self` (scope) instances, so no locking is required
+        or getting anything from the scope
+
+        this method can be `staticmethod` for all I care, but it is better
+        keeping it here
+        """
+        if type_ is NoneType:
+            return None
+
+        if is_generic_alias(type_):
+            type_ = cast(GenericAlias, type_)
+            origin = get_origin(type_)
+
+            if origin is type:
+                return get_args(type_)[0]
+        return _miss
+
+    def _create_instance(self, type_: Any) -> Any:
+        if factory := self._container._get_factory(type_):
+            return self._instantiate_from_factory(
+                factory,
+                _get_typevar_mapping(type_)
+            )
+        raise NoFactoryForTypeError(tuple(self._stack), type_)
+
     def _instantiate_from_factory(
         self, factory: Factory, typevars: dict[TypeVar, Any]
     ) -> Any:
@@ -232,7 +271,7 @@ class Scope:
 
         for name, parameter in factory.parameters.items():
             annotation = typevars.get(parameter.annotation, parameter.annotation)
-            value = self._get_instance(annotation, typevars=typevars)
+            value = self._get_instance_impl(annotation, typevars=typevars)
 
             match parameter.kind:
                 case ParameterKind.POSITIONAL:

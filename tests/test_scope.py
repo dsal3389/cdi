@@ -107,6 +107,18 @@ def test_unique_types(ctr: cdi.Container, scope: cdi.Scope):
     assert instance.g is str
 
 
+def test_transient(scope: cdi.Scope):
+    transient = scope.get_instance(cdi.Transient[Foo])
+
+    # it is expected that scope won't have `Foo` to provide
+    # since the previously request `Foo` is transient so it should
+    # not be provided by the scope
+    assert not scope.has_instance(Foo)
+
+    instance = scope.get_instance(Foo)
+    assert instance is not transient
+
+
 def test_unsupported_edge_cases(scope: cdi.Scope):
     with pytest.raises(cdi.TypeEvaluationError):
         scope.get_instance(FooGeneric[T])

@@ -15,13 +15,15 @@ from typing import (
     get_origin,
     get_args,
 )
-from typing_extensions import TypeAliasType
 
 if TYPE_CHECKING:
     from ._scope import Scope
 
 
 __all__ = ("is_typevar", "is_generic_alias", "is_forward_ref", "InjectableMetadata")
+
+
+_miss = object()
 
 
 def _resolve_type_generics(type_: GenericAlias, typevars: dict[TypeVar, Any]) -> GenericAlias:
@@ -41,13 +43,13 @@ def _get_typevars(orig_bases: Sequence[type | GenericAlias]) -> tuple[TypeVar, .
 
 
 def _get_typevar_mapping(typealias: GenericAlias) -> dict[TypeVar, Any]:
-    origin = get_origin(typealias)
     mapping = {}
 
-    for typevar, value in zip(
-        _get_typevars(origin.__orig_bases__), get_args(typealias)  # type: ignore
-    ):
-        mapping[typevar] = value
+    if origin := get_origin(typealias):
+        for typevar, value in zip(
+            _get_typevars(origin.__orig_bases__), get_args(typealias)  # type: ignore
+        ):
+            mapping[typevar] = value
     return mapping
 
 
@@ -95,10 +97,31 @@ def is_generic_alias(value: Any) -> bool:
 class InjectableMetadata:
     def __init__(
         self,
+        *,
+        transient: bool = False,
         provider_scope: Callable[[Scope], Scope] | None = None,
-        evaluate: bool = True,
         error_message: str | None = None
     ) -> None:
+        self._transient = transient
         self._provider_scope = provider_scope
-        self._evaluate = evaluate
         self._error_message = error_message
+
+    def merge(self, other: InjectableMetadata) -> InjectableMetadata:
+        """
+        merges data from `other` into `self`, wherever `self` has a falsy value, the value will
+        be taken from the given `other`
+        """
+        return InjectableMetadata(
+            transient=self._transient or other._transient,
+            provider_scope=self._provider_scope or other._provider_scope,
+            error_message=self._error_message or other._error_message,
+        )
+
+    def __repr__(self) -> str:
+        return (
+            "InjectableMetadata("
+            f"transient={self._transient}, "
+            f"provider_scope={self._provider_scope}, "
+            f"error_message={self._error_message}, "
+            ")"
+        )

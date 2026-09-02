@@ -11,7 +11,7 @@ from ._exceptions import (
     TypeEvaluationError,
 )
 from ._scope import Scope
-from ._builtins import Lazy
+from ._builtins import Lazy, Transient
 from ._decorators import Injectable
 
 
@@ -21,6 +21,7 @@ __all__ = (
     "Injectable",
     "InjectableMetadata",
     "Lazy",
+    "Transient",
     "CdiError",
     "TypeEvaluationError",
     "IncorrectStackPopping",
