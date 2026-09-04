@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import threading
 from types import ModuleType, GenericAlias
-from typing import ForwardRef
+from typing import ForwardRef, Any
 from typing_extensions import TypeAliasType
 
 from ._typing import is_forward_ref, is_typevar
@@ -91,6 +91,13 @@ class Container:
         self._partially_initialized: list[Factory] = []
         self._lock = threading.Lock()
         self._setup()
+
+    def has_registered(self, type_: Any) -> bool:
+        """
+        returns a boolean value indicating if the type was registered
+        for the current container
+        """
+        return self._get_factory(type_) is not None
 
     def _register(self, factory: Factory) -> None:
         """

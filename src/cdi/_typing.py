@@ -44,13 +44,13 @@ def _get_typevars(orig_bases: Sequence[type | GenericAlias]) -> tuple[TypeVar, .
     return ()
 
 
-def _get_typevar_mapping(typealias: GenericAlias) -> dict[TypeVar, Any]:
+def _get_typevar_mapping(typealias: Any) -> dict[TypeVar, Any]:
     mapping = {}
 
     if origin := get_origin(typealias):
         for typevar, value in zip(
             _get_typevars(origin.__orig_bases__),
-            get_args(typealias),  # type: ignore
+            get_args(typealias),
         ):
             mapping[typevar] = value
     return mapping

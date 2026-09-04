@@ -130,3 +130,38 @@ def test_unsupported_edge_cases(scope: cdi.Scope):
 
     with pytest.raises(cdi.TypeEvaluationError):
         scope.get_instance(FooGeneric)
+
+
+def test_scope_evaluation_policy(ctr: cdi.Container):
+    scope = cdi.Scope(
+        __name__ + "_evluation_policy",
+        container=ctr,
+        no_factory_policy=cdi.policy.EvaluateUnknownTypesPolicy()
+    )
+
+    class MyType:
+        pass
+
+
+    class GenericParam(Generic[T]):
+        def __init__(self, v: T) -> None:
+            self.v = v
+
+
+    class MyTypeGeneric(Generic[T]):
+        def __init__(self, param: GenericParam[T]) -> None:
+            self.param = param
+
+    assert not scope.has_instance(MyType)
+    assert not scope.has_instance(float)
+    assert not scope.has_instance(str)
+    assert not scope.container.has_registered(MyType)
+    assert not scope.container.has_registered(float)
+    assert not scope.container.has_registered(str)
+
+    assert scope.get_instance(MyType) is scope.get_instance(MyType)
+    assert scope.get_instance(str) == str()
+
+    assert scope.get_instance(MyTypeGeneric[float])
+    assert scope.get_instance(MyTypeGeneric[float]).param.v == 0.0
+    assert scope.has_instance(MyType)

@@ -2,6 +2,7 @@
 .. include:: ../../README.md
 """
 
+from . import policy
 from ._typing import InjectableMetadata
 from ._container import Container
 from ._exceptions import (
@@ -21,6 +22,7 @@ __all__ = (
     "Injectable",
     "InjectableMetadata",
     "Lazy",
+    "policy",
     "Transient",
     "CdiError",
     "TypeEvaluationError",

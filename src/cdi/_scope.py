@@ -5,7 +5,7 @@ import threading
 from collections import deque
 from types import NoneType, GenericAlias
 from typing import Any, Annotated, TypeVar, get_origin, get_args, cast
-from typing_extensions import TypeForm
+from typing_extensions import TypeForm, TypeAliasType
 
 from ._container import Container
 from ._factory import Factory, ParameterKind
@@ -15,6 +15,7 @@ from ._exceptions import (
     NoFactoryForTypeError,
     TypeEvaluationError,
 )
+from .policy import NoFactoryPolicy, ErrorNoFactoryPolicy
 from ._tree import PrefixTree, PrefixTreeTypeFindStrategy, type_as_prefix_steps
 from ._typing import (
     _miss,
@@ -44,6 +45,13 @@ class Scope:
 
     the scope name is mostly for easier debugging and clearer errors
 
+    ## evaluation
+    the scope uses the given `Container` to look up for factories that can produce the desired type
+    if the container has no such type the type evaluation will be moved to the provided `no_factory_policy`
+    that is called when a type has no factory and continue the evaluation from there
+
+    by default the policy is `cdi.policy.ErrorNoFactoryPolicy()`
+
     ## thread safety
     scope is threadsafe, for every instance an internal lock is aquired preventing
     2 threads evaluating at the same time
@@ -53,7 +61,8 @@ class Scope:
     """
 
     def __init__(
-        self, __name: str, /, *, container: Container, parent: Scope | None = None
+        self, __name: str, /, *, container: Container, parent: Scope | None = None,
+        no_factory_policy: NoFactoryPolicy | None = None
     ) -> None:
         self._name = __name
         self._parent = parent
@@ -61,6 +70,7 @@ class Scope:
         self._instances: PrefixTree[type, Any] = PrefixTree(
             find_strategy=PrefixTreeTypeFindStrategy()
         )
+        self._no_factory_policy = no_factory_policy or ErrorNoFactoryPolicy()
 
         self._stack: list[type] = []
         self._lock = threading.RLock()
@@ -79,16 +89,16 @@ class Scope:
         """returns the parent of the scope if any"""
         return self._parent
 
-    def fork(self, name: str | None = None) -> Scope:
+    def fork(self, __name: str | None = None, /) -> Scope:
         """
         forks the scope, creating a sub scope that has the same container
         as the current scope, and set the current scope as the parent
         """
         return Scope(
-            name or (self.name + "-fork"), container=self._container, parent=self
+            __name or (self.name + "-fork"), container=self._container, parent=self
         )
 
-    def has_instance(self, type_: Any) -> bool:
+    def has_instance(self, __type: Any, /) -> bool:
         """
         returns a boolean value indicating if the scope has a live
         instance of the given type
@@ -96,18 +106,18 @@ class Scope:
         it doesn't check if the scope can create such type, for possibility
         of type creation refer to the scope `cdi.Container` from `scope.container`
         """
-        prefix = type_as_prefix_steps(type_)
+        prefix = type_as_prefix_steps(__type)
         with self._lock:
             return self._instances.find(prefix) is not None
 
-    def get_instance(self, type_: TypeForm[_T]) -> _T:
+    def get_instance(self, __type: TypeForm[_T], /) -> _T:
         """
         returns an instance of the given type, assuming some factory
         is registered at the container level that can create the type
         """
-        return self._get_instance_impl(type_, typevars={})
+        return self._get_instance_impl(__type, typevars={})
 
-    def insert_instance(self, instance: Any) -> None:
+    def insert_instance(self, __instance: Any, /) -> None:
         """
         inserts the live instance into the scope, mapping between the instance
         type to the instance itself
@@ -123,9 +133,9 @@ class Scope:
         assert scope.get_instance(object) is my_obj
         ```
         """
-        prefix = type_as_prefix_steps(type(instance))
+        prefix = type_as_prefix_steps(type(__instance))
         with self._lock:
-            self._instances.insert(prefix, instance)
+            self._instances.insert(prefix, __instance)
 
     def _get_instance_impl(
         self,
@@ -209,14 +219,16 @@ class Scope:
                 else:
                     return scope._get_unwrapped_type(type_)
             except NoFactoryForTypeError as e:
-                exceptions.append(
-                    TypeEvaluationError(
-                        f"{self} failed to evaluate type `{type_.__name__}` due to error: "
-                        + str(e)
-                        + "\n"
-                        + (custom_error_message or "")
-                    )
+                exception = TypeEvaluationError(
+                    f"{self} failed to evaluate type `{type_.__name__}` due to error: "
+                    + str(e)
+                    + "\n"
+                    + (custom_error_message or "")
                 )
+
+                if not types_:
+                    raise exception
+                exceptions.append(exception)
 
         error_message = (
             f"{self} failed to evaluate type {type_} due to errors:\n"
@@ -272,7 +284,11 @@ class Scope:
     def _create_instance(self, type_: Any) -> Any:
         if factory := self._container._get_factory(type_):
             return self._instantiate_from_factory(factory, _get_typevar_mapping(type_))
-        raise NoFactoryForTypeError(tuple(self._stack), type_)
+
+        try:
+            return self._no_factory_policy.handle(self, type_)
+        except Exception as e:
+            raise NoFactoryForTypeError(tuple(self._stack), type_) from e
 
     def _instantiate_from_factory(
         self, factory: Factory, typevars: dict[TypeVar, Any]

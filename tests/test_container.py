@@ -1,4 +1,5 @@
 import cdi
+import pytest
 from typing import TypeVar, Generic
 
 
@@ -6,9 +7,12 @@ T = TypeVar("T")
 V = TypeVar("V")
 
 
-def test_registration():
-    ctr = cdi.Container()
+@pytest.fixture
+def ctr() -> cdi.Container:
+    return cdi.Container()
 
+
+def test_registration(ctr: cdi.Container):
     @cdi.Injectable(ctr)
     class Foo:
         def __init__(self, x: int, y: int) -> None: ...
@@ -29,9 +33,7 @@ def test_registration():
     assert tuple(foo2_factory.parameters.keys()) == ()
 
 
-def test_with_inheritance():
-    ctr = cdi.Container()
-
+def test_with_inheritance(ctr: cdi.Container):
     class Parent:
         def __init__(self, name: str, age: int) -> None: ...
 
@@ -47,7 +49,7 @@ def test_with_inheritance():
     assert child_factory.parameters["age"].annotation is float
 
 
-def test_with_generics():
+def test_with_generics(ctr: cdi.Container):
     ctr = cdi.Container()
 
     @cdi.Injectable(ctr)
@@ -68,3 +70,15 @@ def test_with_generics():
 
     assert foo_factory.parameters["x"].annotation is T
     assert foo_factory.parameters["y"].annotation is V
+
+
+def test_container_has_registered(ctr: cdi.Container):
+
+    @cdi.Injectable(ctr)
+    class Foo(Generic[T, V]):
+        def __init__(self, x: T, y: V) -> None: ...
+
+    assert ctr.has_registered(Foo[int, str])
+    assert ctr.has_registered(Foo)
+    assert not ctr.has_registered(int)
+    assert not ctr.has_registered(str)

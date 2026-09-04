@@ -50,7 +50,11 @@ class TypeEvaluationError(CdiError):
 class NoFactoryForTypeError(CdiError):
     """raise when no factory found for the required type in the container"""
 
-    def __init__(self, stack: tuple[type, ...], type_: Any) -> None:
+    def __init__(
+        self,
+        stack: tuple[type, ...],
+        type_: Any
+    ) -> None:
         message = (
             f"No factory was provided for required type `{type_}`, backtrace:\n"
             + _stack_traceback_message(stack)
