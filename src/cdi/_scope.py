@@ -5,7 +5,7 @@ import threading
 from collections import deque
 from types import NoneType, GenericAlias
 from typing import Any, Annotated, TypeVar, get_origin, get_args, cast
-from typing_extensions import TypeForm, TypeAliasType
+from typing_extensions import TypeForm
 
 from ._container import Container
 from ._factory import Factory, ParameterKind
@@ -100,7 +100,10 @@ class Scope:
         as the current scope, and set the current scope as the parent
         """
         return Scope(
-            __name or (self.name + "-fork"), container=self._container, parent=self
+            __name or (self.name + "-fork"),
+            container=self._container,
+            parent=self,
+            no_factory_policy=self._no_factory_policy,
         )
 
     def has_instance(self, __type: Any, /) -> bool:
