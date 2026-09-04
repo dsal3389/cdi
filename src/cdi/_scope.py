@@ -179,7 +179,7 @@ class Scope:
                     types_.extendleft((t, metadata) for t in _unwrap_union(type_))
                     continue
                 if origin is Annotated:
-                    # we look for the relevant metadata and also update the real
+                    # look for the relevant metadata and also update the real
                     # value of the annontated type
                     inner, annotated_metadata = _get_annotated_injectable_metadata(
                         type_
@@ -188,7 +188,7 @@ class Scope:
                         (
                             inner,
                             # try to merge previous metadata with the annotated metadata
-                            # but we give more priority to the annotation truthy values
+                            # but give more priority to the annotation truthy values
                             annotated_metadata.merge(metadata)
                             if annotated_metadata
                             else metadata,
@@ -206,7 +206,7 @@ class Scope:
                     scope = metadata._provider_scope(self)
 
                     if scope is not self:
-                        # if we need to call a different scope to evaluate the
+                        # if need to call a different scope to evaluate the
                         # type, we don't want the provider scope to call `_provider_scope`
                         # the results can be unexpected
                         metadata_copy = copy.copy(metadata)
