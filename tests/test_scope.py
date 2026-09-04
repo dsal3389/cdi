@@ -136,17 +136,15 @@ def test_scope_evaluation_policy(ctr: cdi.Container):
     scope = cdi.Scope(
         __name__ + "_evluation_policy",
         container=ctr,
-        no_factory_policy=cdi.policy.EvaluateUnknownTypesPolicy()
+        no_factory_policy=cdi.policy.EvaluateUnknownTypesPolicy(),
     )
 
     class MyType:
         pass
 
-
     class GenericParam(Generic[T]):
         def __init__(self, v: T) -> None:
             self.v = v
-
 
     class MyTypeGeneric(Generic[T]):
         def __init__(self, param: GenericParam[T]) -> None:

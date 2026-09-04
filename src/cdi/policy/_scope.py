@@ -2,7 +2,16 @@ from __future__ import annotations
 
 import inspect
 from types import GenericAlias
-from typing import TYPE_CHECKING, Any, Annotated, Generic, TypeVar, get_origin, get_args, cast
+from typing import (
+    TYPE_CHECKING,
+    Any,
+    Annotated,
+    Generic,
+    TypeVar,
+    get_origin,
+    get_args,
+    cast,
+)
 from typing_extensions import TypeForm
 
 from cdi._typing import _get_typevar_mapping, is_generic_alias
@@ -67,9 +76,7 @@ class EvaluateUnknownTypesPolicy(NoFactoryPolicy):
     ```
     """
 
-    __unsupported_origins__ = (
-        Generic,
-    )
+    __unsupported_origins__ = (Generic,)
     __safe_builtin_types__ = (
         float,
         int,
@@ -107,10 +114,10 @@ class EvaluateUnknownTypesPolicy(NoFactoryPolicy):
             return factory()
 
         args = []
-        kwargs= {}
+        kwargs = {}
         typevars = _get_typevar_mapping(type_)
 
-        for (name, parameter) in signature.parameters.items():
+        for name, parameter in signature.parameters.items():
             annotation = typevars.get(parameter.annotation, parameter.annotation)
 
             if is_generic_alias(parameter.annotation):
@@ -129,12 +136,12 @@ class EvaluateUnknownTypesPolicy(NoFactoryPolicy):
                 args.append(instance)
         return factory(*args, **kwargs)
 
-    def _evaluate_generic_parameter(self, type_: GenericAlias, typevars: dict[TypeVar, Any]) -> GenericAlias:
+    def _evaluate_generic_parameter(
+        self, type_: GenericAlias, typevars: dict[TypeVar, Any]
+    ) -> GenericAlias:
         origin = get_origin(type_)
         arguments = []
 
         for type_arg in get_args(type_):
-            arguments.append(
-                typevars.get(type_arg, type_arg)
-            )
+            arguments.append(typevars.get(type_arg, type_arg))
         return GenericAlias(origin, tuple(arguments))

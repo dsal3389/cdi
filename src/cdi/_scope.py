@@ -61,8 +61,13 @@ class Scope:
     """
 
     def __init__(
-        self, __name: str, /, *, container: Container, parent: Scope | None = None,
-        no_factory_policy: NoFactoryPolicy | None = None
+        self,
+        __name: str,
+        /,
+        *,
+        container: Container,
+        parent: Scope | None = None,
+        no_factory_policy: NoFactoryPolicy | None = None,
     ) -> None:
         self._name = __name
         self._parent = parent

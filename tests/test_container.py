@@ -73,7 +73,6 @@ def test_with_generics(ctr: cdi.Container):
 
 
 def test_container_has_registered(ctr: cdi.Container):
-
     @cdi.Injectable(ctr)
     class Foo(Generic[T, V]):
         def __init__(self, x: T, y: V) -> None: ...
