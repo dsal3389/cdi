@@ -145,3 +145,23 @@ class EvaluateUnknownTypesPolicy(NoFactoryPolicy):
         for type_arg in get_args(type_):
             arguments.append(typevars.get(type_arg, type_arg))
         return GenericAlias(origin, tuple(arguments))
+
+
+class _LifetimePolicy(NoFactoryPolicy):
+    def handle(self, scope: Scope, type_: TypeForm[_T]) -> _T:
+        # local import to prevent circular deps
+        from cdi._builtins import Transient
+
+        if scope.parent is None:
+            raise TypeError(f"couldn't evaluate given type `{type_}`")
+
+        if scope.parent.has_instance(type_):
+            # if the parent has instance to give for the required
+            # type then we want to get that instance
+            return scope.parent.get_instance(type_)
+        # if the parent doesn't have something ready already, we want to create
+        # a new one that will not be registered on the parent level
+        # but on our scope level
+        return scope.parent.get_instance(
+            Transient[type_]  # type: ignore
+        )

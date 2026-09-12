@@ -2,7 +2,9 @@ from __future__ import annotations
 
 import copy
 import threading
+import contextlib
 from collections import deque
+from collections.abc import Iterator
 from types import NoneType, GenericAlias
 from typing import Any, Annotated, TypeVar, get_origin, get_args, cast
 from typing_extensions import TypeForm
@@ -15,7 +17,7 @@ from ._exceptions import (
     NoFactoryForTypeError,
     TypeEvaluationError,
 )
-from .policy import NoFactoryPolicy, ErrorNoFactoryPolicy
+from .policy import NoFactoryPolicy, ErrorNoFactoryPolicy, _LifetimePolicy
 from ._tree import PrefixTree, PrefixTreeTypeFindStrategy, type_as_prefix_steps
 from ._typing import (
     _miss,
@@ -124,6 +126,43 @@ class Scope:
         is registered at the container level that can create the type
         """
         return self._get_instance_impl(__type, typevars={})
+
+    @contextlib.contextmanager
+    def lifetime(self) -> Iterator[Scope]:
+        """
+        a context manager that returns a scope, for existing instance, the scope will attempt
+        to get the existing instance
+
+        newly created instances will be bounded to the lifetime scope, so when the lifetime scope
+        is dropped, all the instances created in the lifetime will drop as well
+
+        the lifetime scope will not insert newly created instances into the parent scope
+
+        ```py
+        scope = cdi.Scope(ctr)
+        assert not scope.has_instance(str)
+
+        with scope.lifetime() as lifetime:
+            lifetime.get_instance(str)
+
+        # although `lifetime` called `get_instance`, the `scope` has no
+        # such instance because it was created under the lifetime context
+        assert not scope.has_instance(str)
+        ```
+        """
+        lifetime = Scope(
+            self.name + "-lifetime",
+            parent=self,
+            # we create a new container to trick the scope
+            # to always call the `no_factory_policy`
+            container=Container(),
+            no_factory_policy=_LifetimePolicy()
+        )
+
+        try:
+            yield lifetime
+        finally:
+            pass
 
     def insert_instance(self, __instance: Any, /) -> None:
         """

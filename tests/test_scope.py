@@ -132,6 +132,31 @@ def test_unsupported_edge_cases(scope: cdi.Scope):
         scope.get_instance(FooGeneric)
 
 
+def test_lifetime(ctr: cdi.Container, scope: cdi.Scope):
+    scope.insert_instance("hello")
+    instance = scope.get_instance(FooGeneric[str])
+
+    with scope.lifetime() as lifetime:
+        assert lifetime.get_instance(FooGeneric[str]) is instance
+
+        lifetime.get_instance(FooGeneric[int])
+        assert lifetime.has_instance(FooGeneric[int])
+
+    assert not scope.has_instance(FooGeneric[int])
+
+    with scope.lifetime() as lifetime:
+        @cdi.Injectable(ctr)
+        class Fake:
+            def __init__(self, scope: cdi.Scope) -> None:
+                self.scope = scope
+
+        instance = lifetime.get_instance(Fake)
+
+        # the instance that creates the `Fake` class should be `scope`
+        # and not `lifetime`
+        assert instance.scope is scope
+
+
 def test_scope_evaluation_policy(ctr: cdi.Container):
     scope = cdi.Scope(
         __name__ + "_evluation_policy",
