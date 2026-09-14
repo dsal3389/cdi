@@ -16,6 +16,11 @@ dependencies = [
 [project.urls]
 Repository = "https://github.com/dsal3389/cdi"
 
+[project.optional-dependencies]
+fastapi = [
+    "fastapi>=0.141.1",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/cdi"]
 
