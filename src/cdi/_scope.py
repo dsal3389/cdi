@@ -128,7 +128,7 @@ class Scope:
         return self._get_instance_impl(__type, typevars={})
 
     @contextlib.contextmanager
-    def lifetime(self) -> Iterator[Scope]:
+    def lifetime(self, label: str | None = None, /) -> Iterator[Scope]:
         """
         a context manager that returns a scope, for existing instance, the scope will attempt
         to get the existing instance
@@ -150,19 +150,14 @@ class Scope:
         assert not scope.has_instance(str)
         ```
         """
-        lifetime = Scope(
-            self.name + "-lifetime",
+        yield Scope(
+            self.name + "-lifetime" + (("-" + label) if label else ""),
             parent=self,
             # we create a new container to trick the scope
             # to always call the `no_factory_policy`
             container=Container(),
             no_factory_policy=_LifetimePolicy(),
         )
-
-        try:
-            yield lifetime
-        finally:
-            pass
 
     def insert_instance(self, __instance: Any, /) -> None:
         """

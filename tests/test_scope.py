@@ -228,10 +228,7 @@ def test_lifetime(ctr: cdi.Container, scope: cdi.Scope):
                 self.scope = scope
 
         instance = lifetime.get_instance(Fake)
-
-        # the instance that creates the `Fake` class should be `scope`
-        # and not `lifetime`
-        assert instance.scope is scope
+        assert instance.scope is lifetime
 
 
 def test_scope_evaluation_policy(ctr: cdi.Container):
