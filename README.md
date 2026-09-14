@@ -111,6 +111,13 @@ assert scope.get_instance(Foo[Foo[int]]).v.v == 100
 * TypeVars as parameters that are not used in return type
 * Typevars as injectable return type
 
+## Async
+although `cdi` doesn't have an explicit `async` interface, it does support async code, `cdi` have
+no internal `io` (does not yield back control) so it doesn't make sense to implement `async` interface for code
+that would not benifit from it in any way
+
+running multiple asyncio executors with cdi is supported because each executor is a separate thread
+and `cdi` has internal `RLock` on internal objects in case they are shared across threads
 
 # Documentation
 
