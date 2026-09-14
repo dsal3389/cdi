@@ -149,9 +149,6 @@ class EvaluateUnknownTypesPolicy(NoFactoryPolicy):
 
 class _LifetimePolicy(NoFactoryPolicy):
     def handle(self, scope: Scope, type_: TypeForm[_T]) -> _T:
-        # local import to prevent circular deps
-        from cdi._builtins import Transient
-
         if scope.parent is None:
             raise TypeError(f"couldn't evaluate given type `{type_}`")
 
@@ -159,9 +156,15 @@ class _LifetimePolicy(NoFactoryPolicy):
             # if the parent has instance to give for the required
             # type then we want to get that instance
             return scope.parent.get_instance(type_)
-        # if the parent doesn't have something ready already, we want to create
-        # a new one that will not be registered on the parent level
-        # but on our scope level
-        return scope.parent.get_instance(
-            Transient[type_]  # type: ignore
+
+        # if the parent doesn't have a live instance for the type, we will
+        # try to get the factory from the parent container and initialize
+        # it with the current `lifetime` scope
+        if not (factory := scope.parent.container._get_factory(type_)):
+            raise TypeError(
+                f"couldn't find factory for type `{type_}`"
+            )
+        return scope._instantiate_from_factory(
+            factory,
+            typevars=_get_typevar_mapping(type_)
         )
