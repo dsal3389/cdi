@@ -1,5 +1,9 @@
+import concurrent
+import gc
+import sys
 import cdi
 import pytest
+from concurrent.futures import ThreadPoolExecutor
 from typing import Generic, TypeVar, Annotated
 
 
@@ -130,6 +134,77 @@ def test_unsupported_edge_cases(scope: cdi.Scope):
 
     with pytest.raises(cdi.TypeEvaluationError):
         scope.get_instance(FooGeneric)
+
+
+def test_contextvar(ctr: cdi.Container, scope: cdi.Scope, reraise):
+    contextvar = scope.get_instance(cdi.ContextVar)
+
+    with contextvar.limited(foo=10, foo2=20):
+        def _job(_):
+            with reraise:
+                # since we are in a different thread it is expected
+                # we will not have context var leakage for those vars
+                # which were set on the main thread
+                assert contextvar.get("foo") is None
+                assert contextvar.get("foo2") is None
+
+                with contextvar.limited(thread_foo=10):
+                    pass
+
+        with ThreadPoolExecutor(max_workers=2) as executor:
+            executor.map(_job, range(2))
+
+        # this var has been set on a local thread, it is not expected
+        # to be also on the main thread context
+        assert contextvar.get("thread_foo") is None
+
+
+def test_contextvar_refcount():
+    local_scope = cdi.Scope(__name__, container=cdi.Container())
+    contextvar = local_scope.get_instance(cdi.ContextVar)
+
+    obj = object()
+
+    with contextvar.limited(obj=obj):
+        assert contextvar.get("obj", obj) is obj
+
+    assert sys.getrefcount(local_scope) == 2
+    assert sys.getrefcount(contextvar) == 3
+
+    del local_scope
+    gc.collect()
+
+    # after the local scope is dropped by GC, we should not have
+    # more references except `contextvar` and `sys.getrefcount`
+    assert sys.getrefcount(contextvar) == 2
+    del contextvar
+
+    gc.collect()
+
+    # `obj` and `sys.getrefcount`
+    assert sys.getrefcount(obj) == 2
+
+
+def test_contextvar_refcount_with_threads(reraise):
+    local_scope = cdi.Scope(__name__, container=cdi.Container())
+    contextvar = local_scope.get_instance(cdi.ContextVar)
+
+    obj = object()
+
+    def _job(_):
+        nonlocal contextvar
+        with reraise:
+            assert contextvar.get("obj") is None
+
+    with contextvar.limited(obj=obj):
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            pool.map(_job, range(2))
+
+    del local_scope
+    del contextvar
+    gc.collect()
+
+    assert sys.getrefcount(obj) == 2
 
 
 def test_lifetime(ctr: cdi.Container, scope: cdi.Scope):

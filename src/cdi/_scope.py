@@ -319,6 +319,8 @@ class Scope:
         """
         if type_ is NoneType:
             return None
+        if type_ is Scope:
+            return self
 
         if is_generic_alias(type_):
             type_ = cast(GenericAlias, type_)
@@ -355,7 +357,9 @@ class Scope:
         return factory(*positional_arguments, **keyword_arguments)
 
     def _setup(self) -> None:
-        self.insert_instance(self)
+        from ._builtins import ContextVar
+
+        self.insert_instance(ContextVar(self.name + "-contextvar"))
 
     def __str__(self) -> str:
         return f"Scope<{self.name}>"

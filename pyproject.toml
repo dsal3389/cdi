@@ -27,4 +27,5 @@ build-backend = "hatchling.build"
 dev = [
     "pdoc>=16.0.0",
     "pytest>=8.4.2",
+    "pytest-reraise>=2.1.2",
 ]

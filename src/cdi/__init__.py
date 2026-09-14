@@ -12,7 +12,7 @@ from ._exceptions import (
     TypeEvaluationError,
 )
 from ._scope import Scope
-from ._builtins import Lazy, Transient
+from ._builtins import Lazy, Transient, ContextVar
 from ._decorators import Injectable
 
 
@@ -22,6 +22,7 @@ __all__ = (
     "Injectable",
     "InjectableMetadata",
     "Lazy",
+    "ContextVar",
     "policy",
     "Transient",
     "CdiError",
