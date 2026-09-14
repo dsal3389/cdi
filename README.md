@@ -15,6 +15,20 @@ while some python dependency injectors require some setup and make some things
 harder to understand for a simple dependency injection, `cdi` aims to simplify
 dependency injection and be fast (relativly to python)
 
+## batteries
+* forward reference resolver
+* `Lazy` type for circular deps
+* `Contextvar` support
+* `Transient` for nonsingleton instances
+* `Generics`/`TypeVar` support
+* limited instances
+* scope inheritance
+* no injectable default implementation support
+
+### Explicit is better then implicit
+the library tries to make you explicit with your typing without compromising
+readability or ease of use
+
 ```py
 import cdi
 
@@ -43,8 +57,6 @@ scope = cdi.Scope(cdi)
 instance = scope.get_instance(Foo)
 assert instance.number == 100
 ```
-
-## Support Generics/TypeAliase
 
 ```py
 import cdi 
@@ -95,17 +107,10 @@ assert scope.get_instance(Foo[str]).v == "hello world"
 assert scope.get_instance(Foo[Foo[int]]).v.v == 100
 ```
 
-### what is not supported with generics (at least yet)
+### what is not supported 
 * TypeVars as parameters that are not used in return type
 * Typevars as injectable return type
 
-### Explicit is better then implicit
-the library tries to make you explicit with your typing without compromising
-readability or ease of use
-
-## Planned
-* inject non singleton
-* contextmanager for scope, instances will be bounded to the `with` lifetime
 
 # Documentation
 
