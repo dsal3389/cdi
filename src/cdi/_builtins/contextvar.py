@@ -29,7 +29,9 @@ class ContextVar:
     ) -> None:
         """@private"""
         self._name = name
-        self._ctx: contextvars.ContextVar[dict[Hashable, Any]] = contextvars.ContextVar(name)
+        self._ctx: contextvars.ContextVar[dict[Hashable, Any]] = contextvars.ContextVar(
+            name
+        )
 
     @property
     def name(self) -> str:

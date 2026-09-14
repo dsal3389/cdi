@@ -161,10 +161,7 @@ class _LifetimePolicy(NoFactoryPolicy):
         # try to get the factory from the parent container and initialize
         # it with the current `lifetime` scope
         if not (factory := scope.parent.container._get_factory(type_)):
-            raise TypeError(
-                f"couldn't find factory for type `{type_}`"
-            )
+            raise TypeError(f"couldn't find factory for type `{type_}`")
         return scope._instantiate_from_factory(
-            factory,
-            typevars=_get_typevar_mapping(type_)
+            factory, typevars=_get_typevar_mapping(type_)
         )

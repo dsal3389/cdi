@@ -156,7 +156,7 @@ class Scope:
             # we create a new container to trick the scope
             # to always call the `no_factory_policy`
             container=Container(),
-            no_factory_policy=_LifetimePolicy()
+            no_factory_policy=_LifetimePolicy(),
         )
 
         try:

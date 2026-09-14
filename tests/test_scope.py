@@ -140,6 +140,7 @@ def test_contextvar(ctr: cdi.Container, scope: cdi.Scope, reraise):
     contextvar = scope.get_instance(cdi.ContextVar)
 
     with contextvar.limited(foo=10, foo2=20):
+
         def _job(_):
             with reraise:
                 # since we are in a different thread it is expected
@@ -220,6 +221,7 @@ def test_lifetime(ctr: cdi.Container, scope: cdi.Scope):
     assert not scope.has_instance(FooGeneric[int])
 
     with scope.lifetime() as lifetime:
+
         @cdi.Injectable(ctr)
         class Fake:
             def __init__(self, scope: cdi.Scope) -> None:
