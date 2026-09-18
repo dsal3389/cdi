@@ -17,6 +17,7 @@ dependency injection and be fast (relativly to python)
 
 ## batteries
 * forward reference resolver
+* union support
 * `Lazy` type for circular deps
 * `Contextvar` support
 * `Transient` for nonsingleton instances
@@ -155,15 +156,16 @@ and `cdi` has internal `RLock` on internal objects in case they are shared acros
 # Documentation
 
 ## Container
-container contains registered types, types are registered to a container via `cdi.Injectable`
+container contains registered types and their factories, types are registered to a container via `cdi.Injectable`,
+`cdi.Injecatble` will create the appropriate internal factory in the container
 
-if a type is not registered in the container, `cdi` will not attempt to create that type and raise an error instead, [explicit is bettern then implicit](#explicit-is-better-then-implicit)
-
-you can have multiple different container instances contaning different types, or they contain the same types but they have different providers
+if a type is not registered in the container, `cdi.Scope` will not attempt to create that type and raise an error instead, unless a `EvaluateUnknownTypesPolicy` was provided to the scope [explicit is bettern then implicit](#explicit-is-better-then-implicit)
 
 ```py
 ctr = cdi.Container()
 ```
+
+you can check if a type was registered with the container by calling `cdi.Container.has_registered`
 
 
 ### Forward references
@@ -177,10 +179,10 @@ class Foo:
 ```
 
 such factories will not be usable for injection, to resolve forward refs
-the container class provide `cid.Container.update_forward_ref` which takes the module you want to update the forward refs for, this takes insperation
+the container class provide `cid.Container.update_forward_refs` which takes the module you want to update the forward refs for, this takes insperation
 from `Pydantic/v1`
 
-the `update_forward_ref` has to be called after there is a class that can evaluate the forward ref name
+the `update_forward_refs` has to be called after there is a class that can evaluate the forward ref name
 
 ```py
 import sys
@@ -197,7 +199,7 @@ class Boo: ...
 
 # now that `Boo` is defined, we can update the factories
 # in our current module
-ctr.update_forward_ref(sys.modules[__name__])
+ctr.update_forward_refs(sys.modules[__name__])
 
 # works fine
 instance = Scope(__name__, container=ctr).get_instance(Foo)
