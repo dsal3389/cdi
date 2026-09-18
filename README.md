@@ -29,6 +29,7 @@ dependency injection and be fast (relativly to python)
 the library tries to make you explicit with your typing without compromising
 readability or ease of use
 
+## Examples
 ```py
 import cdi
 
@@ -106,9 +107,41 @@ assert scope.get_instance(Foo[str]).v == "hello world"
 # even nested
 assert scope.get_instance(Foo[Foo[int]]).v.v == 100
 ```
+```py
+scope = cdi.Scope(__name__, container=ctr)
+
+with scope.lifetime() as lifetime:
+    # bounded to the `lifetime` scope, but for non new
+    # instances, they will be fetched from `scope`
+    foo = scope.get_instance(Foo[int]) 
+
+assert not scope.has_instance(Foo[int])
+```
+```py
+scope = cdi.Scope(__name__, container=ctr)
+
+@cdi.Injectable(ctr)
+class A:
+    def __init__(self, b: B) -> None:
+        self.b = b
+
+
+@cdi.Injectable(ctr)
+class B:
+    def __init__(self, a: cdi.Lazy[A]) -> None:
+        self.a = a
+
+
+ctr.update_forward_refs(sys.modules[__name__])
+
+a = scope.get_instance(A)
+b = scope.get_instance(B)
+
+assert a.b.a.wake() is a
+```
 
 ### what is not supported 
-* TypeVars as parameters that are not used in return type
+* list values
 * Typevars as injectable return type
 
 ## Async

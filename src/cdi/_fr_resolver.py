@@ -37,7 +37,7 @@ class ForwardRefResolveByModuleStrategy:
         localns = {}
 
         try:
-            return type_._evaluate(globalns, localns, frozenset())
+            return type_._evaluate(globalns, localns, recursive_guard=frozenset())
         except NameError:
             raise ResolveForwardRefError(
                 f"couldn't evaluate forward reference `{type_.__forward_arg__}` from given module `{self._module}`",
