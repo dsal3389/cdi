@@ -10,5 +10,4 @@ __all__ = (
     "NoFactoryPolicy",
     "ErrorNoFactoryPolicy",
     "EvaluateUnknownTypesPolicy",
-    "_LifetimePolicy",
 )
