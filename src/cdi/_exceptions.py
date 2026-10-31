@@ -9,6 +9,7 @@ __all__ = (
     "ResolveForwardRefError",
     "IncorrectStackPopping",
     "NoFactoryForTypeError",
+    "MissingArgumentAnnotationError",
     "TypeEvaluationError",
     "CircularDependencyError",
 )
@@ -45,6 +46,10 @@ class ResolveForwardRefError(CdiError):
 
 class TypeEvaluationError(CdiError):
     """raise when the given type could not be evaluated, couldn't create an instance"""
+
+
+class MissingArgumentAnnotationError(CdiError):
+    """raise when providing a factory that has argument without annotation"""
 
 
 class NoFactoryForTypeError(CdiError):

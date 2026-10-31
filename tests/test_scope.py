@@ -262,3 +262,26 @@ def test_scope_evaluation_policy(ctr: cdi.Container):
     assert scope.get_instance(MyTypeGeneric[float])
     assert scope.get_instance(MyTypeGeneric[float]).param.v == 0.0
     assert scope.has_instance(MyType)
+
+
+def test_missing_argument_annotation(ctr: cdi.Container):
+    class Something:
+        def __init__(self, x) -> None:
+            pass
+
+    with pytest.raises(cdi.MissingArgumentAnnotationError):
+        cdi.Injectable(ctr).register(Something)
+
+
+def test_util_call(scope: cdi.Scope):
+    def foo(f: FooChildGeneric[int], x: int) -> str:
+        assert f.x == 100
+        assert f.y == 100
+        assert x == 100
+        return "foo"
+
+    assert cdi.call(scope, foo) == "foo"
+    assert cdi.call(scope, lambda: "foo") == "foo"
+
+    with pytest.raises(cdi.MissingArgumentAnnotationError):
+        assert cdi.call(scope, lambda x: "foo") == "foo"

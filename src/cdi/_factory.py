@@ -10,7 +10,7 @@ from collections.abc import Sequence, Callable
 from typing_extensions import Self
 
 from ._fr_resolver import ForwardRefResolver, ForwardRefResolveByModuleStrategy
-from ._exceptions import ResolveForwardRefError
+from ._exceptions import ResolveForwardRefError, MissingArgumentAnnotationError
 from ._typing import _get_typevars, is_typevar, is_forward_ref
 
 
@@ -129,6 +129,14 @@ class MroParameters:
 
                 annotation = parameter.annotation
 
+                if annotation is parameter.empty:
+                    error_message = f"class `{mro[0].__name__}` has parameter without annotated type `{mro[0].__name__}({name}, ...)`"
+
+                    if mro_cls is not mro[0]:
+                        error_message += f", coming from parent class `{mro_cls.__name__}`"
+                    raise MissingArgumentAnnotationError(error_message)
+
+
                 if is_forward_ref(annotation):
                     try:
                         annotation = resolver.resolve(parameter.annotation)
@@ -175,6 +183,11 @@ class FuncParameters:
                     continue
 
             annotation = parameter.annotation
+
+            if annotation is parameter.empty:
+                raise MissingArgumentAnnotationError(
+                    f"function `{func.__name__}` has parameter without annotated type `{func.__name__}({name}, ...)`"  # type: ignore
+                )
 
             if is_forward_ref(annotation):
                 try:
