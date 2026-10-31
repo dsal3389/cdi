@@ -10,10 +10,12 @@ from ._exceptions import (
     IncorrectStackPopping,
     CircularDependencyError,
     TypeEvaluationError,
+    MissingArgumentAnnotationError,
 )
 from ._scope import Scope
 from ._builtins import Lazy, Transient, ContextVar
 from ._decorators import Injectable
+from ._utils import call
 
 
 __all__ = (
@@ -29,4 +31,6 @@ __all__ = (
     "TypeEvaluationError",
     "IncorrectStackPopping",
     "CircularDependencyError",
+    "MissingArgumentAnnotationError",
+    "call"
 )
